@@ -137,9 +137,11 @@ class WhatsAppClient:
         payload = {"type": "interactive", "interactive": {"type": "list", "body": {"text": _clip(body, BODY_MAX)}, "action": action}}
         self._send(user_id, "list", body, options_from(rows), payload)
 
-    def send_location_request(self, user_id: str, body: str, current_label: str, choose_label: str) -> None:
+    def send_location_request(
+        self, user_id: str, body: str, current_label: str, choose_label: str, type_label: str
+    ) -> None:
         """WhatsApp draws its own 'Send location' button, whose picker offers both current location
-        and a dropped pin, so the labels are unused."""
+        and a dropped pin, so the labels are unused; residents can still type a place name."""
         payload = {
             "type": "interactive",
             "interactive": {"type": "location_request_message", "body": {"text": _clip(body, BODY_MAX)}, "action": {"name": "send_location"}},

@@ -46,8 +46,10 @@ class Messenger(Protocol):
         self, user_id: str, body: str, button: str, section_title: str, rows: list[tuple[str, str, str]]
     ) -> None: ...
 
-    def send_location_request(self, user_id: str, body: str, current_label: str, choose_label: str) -> None:
-        """Offer 'share my current/live location' and 'choose a place on the map'."""
+    def send_location_request(
+        self, user_id: str, body: str, current_label: str, choose_label: str, type_label: str
+    ) -> None:
+        """Offer 'share my current/live location', 'choose a place on the map' and 'type the place name'."""
         ...
 
     def download_media(self, media_id: str, dest_dir: Path) -> Path | None: ...

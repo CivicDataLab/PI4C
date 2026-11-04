@@ -123,15 +123,22 @@ class TelegramClient:
         text = f"{body}\n\n" + "\n".join(lines)
         self._send(user_id, "list", body, options_from(rows), {"inline_keyboard": keyboard}, text=text)
 
-    def send_location_request(self, user_id: str, body: str, current_label: str, choose_label: str) -> None:
-        # The first button makes Telegram send the device's location; the second is a plain text
-        # button, since bots can't open the map picker (the flow replies with how to use Attach → Location)
+    def send_location_request(
+        self, user_id: str, body: str, current_label: str, choose_label: str, type_label: str
+    ) -> None:
+        # The first button makes Telegram send the device's location; the others are plain text
+        # buttons, since bots can't open the map picker (the flow replies with how to use
+        # Attach → Location, or asks for the place name)
         keyboard = {
-            "keyboard": [[{"text": current_label, "request_location": True}], [{"text": choose_label}]],
+            "keyboard": [
+                [{"text": current_label, "request_location": True}],
+                [{"text": choose_label}],
+                [{"text": type_label}],
+            ],
             "resize_keyboard": True,
             "one_time_keyboard": True,
         }
-        options = options_from([("loc:current", current_label), ("loc:choose", choose_label)])
+        options = options_from([("loc:current", current_label), ("loc:choose", choose_label), ("loc:type", type_label)])
         self._send(user_id, "location_request", body, options, keyboard)
 
     def acknowledge(self, msg: Incoming) -> None:

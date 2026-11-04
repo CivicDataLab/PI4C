@@ -42,6 +42,12 @@ class Settings(BaseSettings):
 
     session_timeout_min: int = 30
 
+    # Place search for typed place names: LocationIQ when a key is set, else public Nominatim.
+    # Results are kept inside the box "lon_min,lat_min,lon_max,lat_max" (default: Visakhapatnam, GVMC area)
+    locationiq_api_key: str = ""
+    place_search_bbox: str = "82.95,17.55,83.45,17.95"
+    place_search_timeout_s: float = 8.0
+
     # Clustering: join the nearest open cluster within radius; within strict radius it's a confident match
     cluster_radius_m: float = 50.0
     cluster_strict_radius_m: float = 20.0

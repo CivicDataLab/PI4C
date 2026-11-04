@@ -166,3 +166,49 @@ def test_telegram_parsing():
     tap = parse_update(F.reply("42", "cat:civic"))
     assert (tap.type, tap.reply_id) == ("reply", "cat:civic") and tap.callback_id
     assert parse_update(F.audio("42")).type == "unsupported"  # voice notes aren't accepted
+
+
+def test_place_search_keeps_only_results_inside_the_city(monkeypatch):
+    from app import places
+    from app.config import Settings
+
+    items = [
+        {"lat": "17.7124", "lon": "83.3030", "name": "Jagadamba Junction", "display_name": "Jagadamba Junction, Dwaraka Nagar, Visakhapatnam, Andhra Pradesh, 530020, India",
+         "address": {"suburb": "Dwaraka Nagar", "city": "Visakhapatnam", "state": "Andhra Pradesh", "country": "India"}},
+        {"lat": "17.7124", "lon": "83.3030", "name": "Jagadamba Junction", "display_name": "duplicate",
+         "address": {"suburb": "Dwaraka Nagar", "city": "Visakhapatnam"}},
+        {"lat": "17.4375", "lon": "78.4483", "name": "Ameerpet", "display_name": "Ameerpet, Hyderabad, Telangana, India", "address": {}},
+    ]
+    seen = {}
+
+    class Resp:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return items
+
+    def fake_get(url, params, headers, timeout):
+        seen.update(url=url, params=params)
+        return Resp()
+
+    monkeypatch.setattr(places.httpx, "get", fake_get)
+    monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
+    found = places.search("jagadamba", Settings(locationiq_api_key="k"), "te")
+    assert found == [places.Place("Jagadamba Junction", "Dwaraka Nagar, Visakhapatnam", 17.7124, 83.3030)]
+    assert seen["url"] == places.LOCATIONIQ_URL
+    assert seen["params"]["bounded"] == 1 and seen["params"]["key"] == "k" and seen["params"]["accept-language"] == "te"
+
+
+def test_place_search_failure_returns_none(monkeypatch):
+    from app import places
+    from app.config import Settings
+
+    def boom(*a, **k):
+        raise places.httpx.ConnectError("down")
+
+    monkeypatch.setattr(places.httpx, "get", boom)
+    monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
+    assert places.search("x", Settings(locationiq_api_key=""), "en") is None

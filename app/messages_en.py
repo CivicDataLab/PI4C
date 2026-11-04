@@ -32,14 +32,16 @@ PHOTO_SAVED_DESCRIBE = "Photo received. Now please type a short description of t
 
 LOCATION = (
     "Where is the problem?\n\n"
-    "Two buttons are shown in place of your keyboard:\n"
+    "Three buttons are shown in place of your keyboard:\n"
     "1. Live location: sends where you are right now\n"
-    "2. Choose a location: pick the place on the map"
+    "2. Choose a location: pick the place on the map\n"
+    "3. Type the place name: a landmark, shop, road or area\n\n"
+    "You can also type the place name now."
 )
 
 LOCATION_RETRY = (
-    "Location not received. Please tap \"Live location\" or \"Choose a location\". "
-    "These buttons are shown in place of your keyboard."
+    "Location not received. Please tap one of the three buttons shown in place of your keyboard, "
+    "or type the place name."
 )
 
 CHOOSE_ON_MAP = (
@@ -52,8 +54,33 @@ CHOOSE_ON_MAP = (
 
 BTN_SEND_LOCATION = "Live location"
 BTN_CHOOSE_LOCATION = "Choose a location"
+BTN_TYPE_PLACE = "Type the place name"
 
 LOCATION_RECEIVED = "Location received."
+
+TYPE_PLACE = (
+    "Type the name of the place in Visakhapatnam: a landmark, shop, road or area. "
+    "For example: Jagadamba Junction."
+)
+
+CHOOSE_PLACE = "Which of these is the place? Tap it, or type its number."
+PLACE_SECTION = "Places"
+PLACE_NONE = "None of these"
+
+PLACE_SEARCH_FAILED = (
+    "Place search is not working right now. Please tap \"Live location\" or \"Choose a location\"."
+)
+
+
+def place_not_found(query: str) -> str:
+    return (
+        f"No place called \"{query}\" was found in Visakhapatnam. "
+        "Try a nearby landmark or the area name, or use the buttons."
+    )
+
+
+def location_saved(name: str) -> str:
+    return f"Location saved: {name}."
 
 PHOTO = "If you have a photo of the problem, send it. This is optional."
 

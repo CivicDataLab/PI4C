@@ -101,7 +101,8 @@ set `needs_review`. Probabilities and cost are stored in the interaction log. Wi
 |---|---|---|
 | LANGUAGE | తెలుగు / English (first contact and every `/start`) | tap |
 | MENU | 3 buttons: Accessibility / General Civic / Disaster-Climate | tap, or type 1–3 |
-| LOCATION | **Live location** and **Choose a location** keyboard buttons | device location, live location, or a place picked via the attach (paperclip) menu → Location ("Choose a location" replies with those steps) |
+| LOCATION | **Live location**, **Choose a location** and **Type the place name** keyboard buttons | device location, live location, a place picked via the attach (paperclip) menu → Location ("Choose a location" replies with those steps), or a typed place name |
+| LOCATION_PICK | up to 5 matching places in Visakhapatnam as a numbered list, plus "None of these" | tap, type the number, or type another name to search again |
 | SUBCATEGORY | numbered list + buttons | tap, or type the number |
 | DESCRIBE | free text prompt | typed text, or a photo with a caption (voice notes are refused) |
 | PHOTO | optional, "No photo" button | photo or skip |
@@ -142,6 +143,19 @@ scripts) just send the `X-API-Key` header. A web dashboard calling the API from 
 another site also needs its address in `CORS_ORIGINS`; note that a key in browser code is
 visible to anyone using that page.
 
+## Place search (typed place names)
+
+Residents who can't share a location, or would rather not drag a map pin (screen-reader users
+especially), type a landmark, shop, road or area. `app/places.py` searches it and the bot offers
+the matches as a numbered list; the pick is stored with `location_route = place_search`, and the
+read-back says the place name instead of coordinates.
+
+- With `LOCATIONIQ_API_KEY` set, searches go to [LocationIQ](https://locationiq.com) (free plan, no card).
+- Without it, the public OpenStreetMap Nominatim server is used: free and keyless, limited to one
+  search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
+- Results are kept inside `PLACE_SEARCH_BBOX` (`lon_min,lat_min,lon_max,lat_max`), Visakhapatnam's GVMC
+  area by default, so a name like "Ameerpet" (Hyderabad) finds nothing. Shared locations are not limited.
+
 ## Configuration you'll want to edit
 
 - `data/departments.json`: **placeholder** department list. `handles` becomes the classifier's option description.
@@ -160,6 +174,7 @@ app/
   dispatch.py      dedupe + per-resident lock + run flow
   flow.py          conversation state machine (channel-neutral)
   messenger.py     Incoming type + Messenger interface
+  places.py        typed place-name search (LocationIQ / Nominatim), limited to the city
   telegram.py      Telegram adapter (active)
   whatsapp.py      WhatsApp Cloud API adapter (later)
   messages_te.py   Telugu strings (messages_en.py: English)
