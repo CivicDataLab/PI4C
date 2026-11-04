@@ -1,0 +1,45 @@
+{
+  "_note": "Project barrier taxonomy (draft for P1 validation with OPDs). municipal_subject is filled once the corporation's subject/sub-subject master list is available. default_department ids must exist in departments.json.",
+  "categories": [
+    {
+      "id": "accessibility",
+      "label_en": "Accessibility issue",
+      "label_te": "అందుబాటు సమస్య",
+      "subcategories": [
+        {"id": "footpath", "label_en": "Footpath", "description_en": "Broken, encroached or missing footpath", "label_te": "ఫుట్‌పాత్", "description_te": "పాడైన, ఆక్రమించిన లేదా లేని ఫుట్‌పాత్", "default_department": "engineering", "municipal_subject": null},
+        {"id": "ramp", "label_en": "Ramp", "description_en": "Ramp missing or unusable", "label_te": "ర్యాంప్", "description_te": "ర్యాంప్ లేదు లేదా ఉపయోగించలేని స్థితిలో ఉంది", "default_department": "engineering", "municipal_subject": null},
+        {"id": "kerb", "label_en": "Kerb", "description_en": "High kerb, no lowered kerb to cross", "label_te": "ఫుట్‌పాత్ అంచు (కర్బ్)", "description_te": "ఎత్తైన అంచు, దిగడానికి దారి లేదు", "default_department": "engineering", "municipal_subject": null},
+        {"id": "crossing", "label_en": "Road crossing", "description_en": "No safe crossing or signal", "label_te": "రోడ్డు దాటే చోటు", "description_te": "సురక్షితంగా దాటే దారి లేదా సిగ్నల్ లేదు", "default_department": "engineering", "municipal_subject": null},
+        {"id": "toilet", "label_en": "Accessible toilet", "description_en": "Public toilet unusable for persons with disabilities", "label_te": "దివ్యాంగుల మరుగుదొడ్డి", "description_te": "దివ్యాంగులు ఉపయోగించలేని పబ్లిక్ మరుగుదొడ్డి", "default_department": "public_health", "municipal_subject": null},
+        {"id": "transport", "label_en": "Bus stop / transport", "description_en": "Bus stop or transport that can't be boarded", "label_te": "బస్ స్టాప్ / రవాణా", "description_te": "ఎక్కలేని బస్ స్టాప్ లేదా రవాణా", "default_department": "engineering", "municipal_subject": null},
+        {"id": "building", "label_en": "Public building entrance", "description_en": "Barrier at an office, school or hospital entrance", "label_te": "ప్రభుత్వ భవన ప్రవేశం", "description_te": "కార్యాలయం, పాఠశాల, ఆసుపత్రి ప్రవేశంలో అడ్డంకి", "default_department": "town_planning", "municipal_subject": null},
+        {"id": "other", "label_en": "Other", "description_en": "Another accessibility barrier not listed above", "label_te": "ఇతరాలు", "description_te": "పైన లేని ఇతర అందుబాటు అడ్డంకి", "default_department": "disability_welfare", "municipal_subject": null}
+      ]
+    },
+    {
+      "id": "civic",
+      "label_en": "General Civic Issue",
+      "label_te": "సాధారణ పౌర సమస్య",
+      "subcategories": [
+        {"id": "water", "label_en": "Drinking water", "description_en": "No water supply, leak or contamination", "label_te": "తాగునీరు", "description_te": "నీరు రావడం లేదు, లీకేజీ లేదా కలుషితం", "default_department": "water_drainage", "municipal_subject": null},
+        {"id": "drainage", "label_en": "Drainage / sewage", "description_en": "Blocked or overflowing drain, open sewer", "label_te": "డ్రైనేజీ / మురుగు", "description_te": "అడ్డుపడిన లేదా పొంగుతున్న కాలువ, తెరిచిన మురుగు", "default_department": "water_drainage", "municipal_subject": null},
+        {"id": "garbage", "label_en": "Garbage", "description_en": "Garbage not cleared", "label_te": "చెత్త", "description_te": "చెత్త తొలగించలేదు", "default_department": "public_health", "municipal_subject": null},
+        {"id": "streetlight", "label_en": "Streetlight", "description_en": "Streetlight not working", "label_te": "వీధి దీపం", "description_te": "వీధి దీపం వెలగడం లేదు", "default_department": "electrical", "municipal_subject": null},
+        {"id": "road", "label_en": "Road damage", "description_en": "Potholes or broken road", "label_te": "రోడ్డు దెబ్బతినడం", "description_te": "గుంతలు, పాడైన రోడ్డు", "default_department": "engineering", "municipal_subject": null},
+        {"id": "other", "label_en": "Other", "description_en": "Another civic problem not listed above", "label_te": "ఇతరాలు", "description_te": "పైన లేని ఇతర పౌర సమస్య", "default_department": "general", "municipal_subject": null}
+      ]
+    },
+    {
+      "id": "disaster",
+      "label_en": "Disaster/Climate related Issue",
+      "label_te": "విపత్తు / వాతావరణ సంబంధిత సమస్య",
+      "subcategories": [
+        {"id": "flooding", "label_en": "Flooding / waterlogging", "description_en": "Water collecting on streets or in homes", "label_te": "వరద / నీరు నిలవడం", "description_te": "వీధుల్లో లేదా ఇళ్లలో నీరు నిలవడం", "default_department": "disaster_management", "municipal_subject": null},
+        {"id": "storm", "label_en": "Storm damage", "description_en": "Fallen tree, damaged roof or electric pole", "label_te": "తుఫాను నష్టం", "description_te": "చెట్టు పడటం, పైకప్పు లేదా కరెంటు స్తంభం దెబ్బతినడం", "default_department": "disaster_management", "municipal_subject": null},
+        {"id": "heat", "label_en": "Heat stress", "description_en": "Extreme heat, no shade or drinking water", "label_te": "వేడి ప్రభావం", "description_te": "తీవ్రమైన ఎండ, నీడ లేదా తాగునీటి సౌకర్యం లేదు", "default_department": "public_health", "municipal_subject": null},
+        {"id": "shelter", "label_en": "Relief shelter", "description_en": "Shelter inaccessible or lacking facilities", "label_te": "సహాయ శిబిరం", "description_te": "శిబిరానికి చేరలేకపోవడం లేదా సౌకర్యాలు లేకపోవడం", "default_department": "disaster_management", "municipal_subject": null},
+        {"id": "other", "label_en": "Other", "description_en": "Another disaster impact not listed above", "label_te": "ఇతరాలు", "description_te": "పైన లేని ఇతర విపత్తు ప్రభావం", "default_department": "disaster_management", "municipal_subject": null}
+      ]
+    }
+  ]
+}

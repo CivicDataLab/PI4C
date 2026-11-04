@@ -1,0 +1,5 @@
+{
+  "type": "FeatureCollection",
+  "_note": "Optional. Add ward polygons (properties.ward or properties.name) and reports get a ward from their shared location. Empty = ward stays null.",
+  "features": []
+}

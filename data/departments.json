@@ -1,0 +1,13 @@
+{
+  "_note": "PLACEHOLDER: replace with the corporation's real department list. 'handles' is given to the classifier verbatim, so describe responsibilities plainly. Keep ids stable; taxonomy.json default_department refers to them.",
+  "departments": [
+    {"id": "engineering", "name_en": "Engineering", "handles": "Roads, potholes, footpaths, kerbs, ramps, road crossings, bus shelters"},
+    {"id": "water_drainage", "name_en": "Water Supply & Drainage", "handles": "Drinking water supply, pipe leaks, contamination, storm-water drains, sewage overflow, open drains"},
+    {"id": "public_health", "name_en": "Public Health & Sanitation", "handles": "Garbage collection, public toilets, mosquito control, heat-stress relief such as drinking water points"},
+    {"id": "electrical", "name_en": "Electrical", "handles": "Streetlights, exposed or fallen electrical wiring on public land"},
+    {"id": "town_planning", "name_en": "Town Planning", "handles": "Building permissions, encroachments, accessibility of public building entrances"},
+    {"id": "disaster_management", "name_en": "Disaster Management", "handles": "Flooding, waterlogging, cyclone and storm damage, fallen trees, relief camps and shelters"},
+    {"id": "disability_welfare", "name_en": "Welfare of Differently Abled", "handles": "Disability-specific needs and accessibility issues not covered by another department"},
+    {"id": "general", "name_en": "General / Unassigned", "handles": "Anything that does not clearly belong to another department"}
+  ]
+}
