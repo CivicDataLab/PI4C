@@ -46,7 +46,7 @@ if origins := [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 
 @app.get("/health", tags=["ops"])
 def health():
-    return {"status": "ok", "dry_run": settings.dry_run, "classifier_model": settings.openrouter_model or None}
+    return {"status": "ok", "dry_run": settings.dry_run}
 
 
 async def _json_body(request: Request) -> tuple[bytes, dict]:

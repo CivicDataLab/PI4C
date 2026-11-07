@@ -1,11 +1,9 @@
 import re
 
-import httpx
 
 import pytest
 
 from app import classify, geo, i18n, taxonomy
-from app.config import Settings
 from app.models import Report
 
 
@@ -56,87 +54,10 @@ def _report(**kw) -> Report:
 
 
 def test_rules_classifier_flags_urgent():
-    result = classify.classify_report(_report(description_raw="తెరిచిన మురుగు కాలువ, ప్రమాదం!"), Settings())
+    result = classify.classify_report(_report(description_raw="తెరిచిన మురుగు కాలువ, ప్రమాదం!"))
     assert result.severity == "high"
     assert result.department_id == "engineering"
     assert result.method == "rules"
-
-
-class _FakeResponse:
-    def __init__(self, payload: dict, status: int = 200):
-        self.status_code = status
-        self.is_error = status >= 400
-        self.text = ""
-        self._payload = payload
-
-    def raise_for_status(self):
-        if self.is_error:
-            raise httpx.HTTPStatusError("err", request=None, response=None)
-
-    def json(self):
-        return self._payload
-
-
-def _decisions(barrier=("ramp", 0.9), dept=("town_planning", 0.85), severity_probs=None, sev_conf=0.9) -> dict:
-    severity_probs = severity_probs or {"0": 0.0, "1": 0.1, "2": 0.85, "3": 0.05}
-    return {
-        "answers": {
-            "barrier_type": {"type": "choice", "choice": barrier[0], "confidence": barrier[1], "probabilities": {barrier[0]: barrier[1]}},
-            "department": {"type": "choice", "choice": dept[0], "confidence": dept[1], "probabilities": {dept[0]: dept[1]}},
-            "severity": {"type": "score", "score": 1.95, "confidence": sev_conf, "probabilities": severity_probs},
-        },
-        "model": "typesafe/jev-1.14-20261001",
-        "usage": {"cost": 0.00002, "input_tokens": 500, "output_tokens": 60},
-    }
-
-
-MODEL_SETTINGS = dict(openrouter_api_key="k", openrouter_model="typesafe/jev-1.14")
-
-
-def test_decision_request_shape():
-    req = classify.build_request(_report(), "typesafe/jev-1.14")
-    q = req["questions"]
-    assert q["barrier_type"]["type"] == "choice" and "ramp" in q["barrier_type"]["criteria"]
-    assert set(q["department"]["criteria"]) == taxonomy.department_ids()
-    assert q["severity"]["type"] == "score" and len(q["severity"]["criteria"]) == 4
-    assert req["state"]["description"] == "footpath broken"
-
-
-def test_decisions_answers_are_used(monkeypatch):
-    calls = []
-    monkeypatch.setattr(classify.httpx, "post", lambda url, **k: calls.append(url) or _FakeResponse(_decisions()))
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert calls == [classify.DECISIONS_URL]
-    assert (result.method, result.barrier_type, result.department_id, result.severity) == ("decisions", "ramp", "town_planning", "high")
-    assert result.needs_review is False
-    assert result.confidence == 0.85
-    assert result.cost_usd == 0.00002
-
-
-def test_low_confidence_keeps_resident_choice_and_flags(monkeypatch):
-    payload = _decisions(barrier=("ramp", 0.4), dept=("town_planning", 0.3), sev_conf=0.2)
-    monkeypatch.setattr(classify.httpx, "post", lambda *a, **k: _FakeResponse(payload))
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert result.barrier_type == "footpath"
-    assert result.department_id == "engineering"  # rules default
-    assert result.severity == "medium"  # rules
-    assert result.needs_review is True
-
-
-def test_unknown_department_falls_back(monkeypatch):
-    payload = _decisions(dept=("nasa", 0.99))
-    monkeypatch.setattr(classify.httpx, "post", lambda *a, **k: _FakeResponse(payload))
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert result.department_id == "engineering" and result.needs_review is True
-
-
-def test_api_error_falls_back_to_rules(monkeypatch):
-    def boom(*a, **k):
-        raise httpx.ConnectError("down")
-
-    monkeypatch.setattr(classify.httpx, "post", boom)
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert result.method == "rules" and result.needs_review is True
 
 
 def test_telegram_parsing():

@@ -20,12 +20,6 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
-    # Classifier: OpenRouter Decisions API; rules-only when key or model is blank
-    openrouter_api_key: str = ""
-    openrouter_model: str = "typesafe/jev-1.14"
-    openrouter_timeout_s: float = 30.0
-    classify_min_confidence: float = 0.6
-
     # Read API: "name:scope:key,..."
     api_keys: str = ""
     # Web dashboards on other sites allowed to call the API from the browser: "https://a.example,https://b.example"

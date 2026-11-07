@@ -43,9 +43,9 @@ Complaint number shown to residents is `PI4C-` + `id` padded to 6 digits (`PI4C-
 | `department_id` | varchar(64) | yes | Id from `data/departments.json` (indexed) |
 | `severity` | varchar(16) | yes | `low`, `medium`, `high`, `critical` (indexed) |
 | `confidence` | double | yes | Classifier confidence, 0 to 1 |
-| `classifier` | varchar(16) | yes | `decisions` (Jev) or `rules` (keyword fallback) |
-| `classifier_model` | varchar(128) | yes | e.g. `typesafe/jev-1.14` |
-| `summary_en` | text | yes | English summary (empty: Jev returns no text) |
+| `classifier` | varchar(16) | yes | `rules` (keyword rules) |
+| `classifier_model` | varchar(128) | yes | Empty (no model is used) |
+| `summary_en` | text | yes | English summary (empty for now) |
 | `needs_review` | boolean | no | True when the classifier was below the confidence threshold (indexed) |
 | `pwd_marker` | boolean | no | Reporter is a person with disability or caregiver, or category is accessibility (indexed) |
 | `affected` | varchar(16) | no | `self`, `caregiver` or `none` |
@@ -115,7 +115,7 @@ Kept apart from `media` so listing reports never loads file contents. Served by
 | `report_id` | integer | yes | Set once the report exists (indexed, not a FK) |
 | `stage` | varchar(48) | no | Conversation step or event, e.g. classifier call (indexed) |
 | `direction` | varchar(8) | no | `in`, `out` or `system` |
-| `payload` | json | yes | Message content, classifier probabilities and cost |
+| `payload` | json | yes | Message content and classifier result |
 | `created_at` | timestamp | no | |
 
 ### `chat_sessions`: where each resident is in a conversation

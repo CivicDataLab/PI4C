@@ -2,11 +2,11 @@
 
 Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram
 bot in Telugu or English. Each report is structured (category, location, photo, disability context), read back
-for confirmation, triaged by a decision model (barrier type, department, severity), grouped with
+for confirmation, triaged by keyword rules (barrier type, department, severity), grouped with
 repeat reports of the same problem, and exposed through a REST API for downstream systems.
 
 ```
-Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (Jev) ─► cluster ─► /api/v1/*
+Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (rules) ─► cluster ─► /api/v1/*
 ```
 
 The flow is channel-neutral (`app/messenger.py`); Telegram is the only adapter.
@@ -62,22 +62,18 @@ To copy older photos from disk into the database (safe to re-run):
 uv run python -m app.media_to_db
 ```
 
-## Classifier (Jev via OpenRouter)
+## Classifier (keyword rules)
 
-[Jev](https://openrouter.ai/docs/guides/community/jev) is a decision model: it returns typed
-answers with probabilities, not text. `app/classify.py` sends one request to
-`POST https://openrouter.ai/api/alpha/decisions` with three questions:
+`app/classify.py` triages each confirmed report without any external service:
 
-| Question | Type | Options |
-|---|---|---|
-| `barrier_type` | choice | sub-categories of the category the resident picked |
-| `department` | choice | `data/departments.json`, described by `handles` |
-| `severity` | score | low → medium → high → critical |
+| Field | Rule |
+|---|---|
+| `barrier_type` | the sub-category the resident picked |
+| `department_id` | the sub-category's `default_department` in `data/taxonomy.json` |
+| `severity` | `high` for urgent words (danger, open manhole, live wire...) or disaster reports, otherwise `medium` |
 
-Answers below `CLASSIFY_MIN_CONFIDENCE` (0.6) keep the resident's own choice / the rule default and
-set `needs_review`. Probabilities and cost are stored in the interaction log. With no
-`OPENROUTER_API_KEY`, keyword rules are used. Jev returns no text, so `summary_en` and
-`description_en` stay empty.
+A report whose default department isn't in `data/departments.json` gets `needs_review`.
+`summary_en`, `description_en`, `confidence` and `classifier_model` stay empty.
 
 ## Conversation
 
@@ -106,7 +102,7 @@ Only private chats are handled; group messages are ignored.
 | `GET /reports/{id}` | read | full record incl. media links |
 | `PATCH /reports/{id}` | write | status, status_note, department_id, severity, municipal_subject, needs_review |
 | `GET /reports/{id}/media/{media_id}` | read | photo (from the database) |
-| `GET /reports/{id}/log` | write | stage-wise interaction log incl. classifier probabilities |
+| `GET /reports/{id}/log` | write | stage-wise interaction log |
 | `GET /reports.geojson` | read | same filters, GeoJSON points |
 | `GET /reports.csv` | read | same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
 | `GET /clusters`, `/clusters/{id}` | read | distinct problems with report counts |
@@ -160,7 +156,7 @@ app/
   places.py        typed place-name search (LocationIQ / Nominatim), limited to the city
   telegram.py      Telegram adapter
   messages_te.py   Telugu strings (messages_en.py: English)
-  classify.py      Jev decisions / rules triage
+  classify.py      keyword-rules triage
   cluster.py       repeat-report grouping
   geo.py           ward lookup, distances
   api/             REST endpoints
@@ -171,8 +167,6 @@ tests/
 
 ## Not yet done
 
-- Photos aren't sent to Jev yet (it accepts images).
 - No status notifications back to residents.
 - Telugu strings need native-speaker and OPD review.
 - No municipal grievance-system connector; downstream systems pull from the API.
-- The Decisions API is under `/api/alpha/`, so its shape may change.

@@ -13,15 +13,11 @@ log = logging.getLogger(__name__)
 
 def process_report(db: Session, report: Report, settings: Settings) -> None:
     try:
-        result = classify.classify_report(report, settings)
+        result = classify.classify_report(report)
         report.barrier_type = result.barrier_type
         report.department_id = result.department_id
         report.severity = result.severity
-        report.summary_en = result.summary_en
-        report.description_en = result.description_en
-        report.confidence = result.confidence
         report.classifier = result.method
-        report.classifier_model = result.model
         report.needs_review = result.needs_review
         audit.log_event(db, report.interaction_id, "classified", payload=result.as_log(), report_id=report.id)
     except Exception as exc:
