@@ -3,19 +3,18 @@ from datetime import datetime, timezone
 import hashlib
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
 
 def utcnow() -> datetime:
-    """Naive UTC; SQLite drops tzinfo, so we keep everything naive and UTC (Postgres: timestamp without time zone)."""
+    """Naive UTC; SQLite drops tzinfo, so we keep everything naive and UTC."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-# JSONB on Postgres (indexable, queryable); plain JSON text on SQLite
-JsonDoc = JSON().with_variant(JSONB(), "postgresql")
+# Stored as JSON text in SQLite
+JsonDoc = JSON()
 
 
 class ChatSession(Base):
@@ -137,7 +136,7 @@ class Media(Base):
 
 
 class MediaFile(Base):
-    """The photo bytes (BYTEA on Postgres). Kept apart from `media` so listing reports
+    """The photo bytes (a BLOB). Kept apart from `media` so listing reports
     never loads file contents; only GET /reports/{id}/media/{media_id} reads them."""
 
     __tablename__ = "media_files"

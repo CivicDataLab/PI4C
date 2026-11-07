@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import distinct, func, literal_column, select
+from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
 from app.api.filters import report_filters
@@ -86,10 +86,6 @@ def stats_counts(
 def _period(db: Session, interval: str):
     """created_at truncated to the start of its day / week (Monday) / month, as YYYY-MM-DD."""
     col = Report.created_at
-    if db.get_bind().dialect.name == "postgresql":
-        # Literals, not bound parameters: Postgres only matches the GROUP BY expression if it's identical
-        trunc = func.date_trunc(literal_column(f"'{interval}'"), col)
-        return func.to_char(trunc, literal_column("'YYYY-MM-DD'"))
     if interval == "day":
         return func.date(col)
     if interval == "week":

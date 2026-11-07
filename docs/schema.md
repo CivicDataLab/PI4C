@@ -1,9 +1,9 @@
 # PI4C database schema
 
-Read from the live Neon database (Postgres 18, `neondb`) on 2026-11-04. Tables are defined in
+The project stores everything in SQLite (`data/pi4c.db`). Tables are defined in
 `app/models.py` and created on startup; there are no migration files.
 
-All timestamps are `timestamp without time zone` holding **UTC**.
+All timestamps are naive (no time zone) and hold **UTC**.
 
 ## Relationships
 
@@ -101,7 +101,7 @@ Kept apart from `media` so listing reports never loads file contents. Served by
 | Column | Type | Null | Meaning |
 |---|---|---|---|
 | `media_id` | integer, PK + FK | no | → `media.id`, deleted with it |
-| `data` | bytea | no | The image file |
+| `data` | blob | no | The image file |
 | `size_bytes` | integer | no | |
 | `sha256` | varchar(64) | no | Used as the HTTP `ETag` |
 | `created_at` | timestamp | no | |
@@ -115,7 +115,7 @@ Kept apart from `media` so listing reports never loads file contents. Served by
 | `report_id` | integer | yes | Set once the report exists (indexed, not a FK) |
 | `stage` | varchar(48) | no | Conversation step or event, e.g. classifier call (indexed) |
 | `direction` | varchar(8) | no | `in`, `out` or `system` |
-| `payload` | jsonb | yes | Message content, classifier probabilities and cost |
+| `payload` | json | yes | Message content, classifier probabilities and cost |
 | `created_at` | timestamp | no | |
 
 ### `chat_sessions`: where each resident is in a conversation
@@ -129,7 +129,7 @@ The only table that holds the raw chat ID. Sessions expire after 30 minutes of s
 | `interaction_id` | varchar(36) | no | UUID of the current conversation |
 | `state` | varchar(32) | no | Current step: `LANGUAGE`, `MENU`, `LOCATION`, `LOCATION_PICK`, … `READBACK` |
 | `language` | varchar(8) | yes | Remembered across reports |
-| `data` | jsonb | no | Answers collected so far |
+| `data` | json | no | Answers collected so far |
 | `created_at`, `updated_at` | timestamp | no | |
 
 ### `inbound_messages`: duplicate-delivery guard

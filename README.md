@@ -48,34 +48,19 @@ webhook can't run at the same time; `poll` deletes the webhook on start.
 
 ## Database
 
-SQLite (`data/pi4c.db`) by default; Postgres when `DATABASE_URL` is set in `.env`:
+SQLite only for now: `data/pi4c.db`, or another SQLite file set as `DATABASE_URL=sqlite:///...`
+in `.env`. Tables are created on startup.
 
-```
-DATABASE_URL=postgresql://user:password@host:5432/pi4c
-```
-
-Tables are created on startup. Hosted `postgres://` URLs work as given; add `?sslmode=require`
-if the provider asks for it. JSON columns (`chat_sessions.data`, `interaction_logs.payload`) are
-JSONB on Postgres.
-
-Photos are stored in the database too (`media_files`, BYTEA on Postgres), written
+Photos are stored in the database too (`media_files`), written
 with the report when the resident confirms. During the conversation they sit in `data/media/`,
 since the session state can't hold file bytes; that copy is left in place. The API serves files
 from the database, falling back to disk for reports made before this.
 
-To move existing SQLite data across (IDs and complaint numbers are kept; refuses a non-empty target),
-then copy older photos from disk into the database (safe to re-run):
-
-```bash
-uv run python -m app.migrate_sqlite
-```
+To copy older photos from disk into the database (safe to re-run):
 
 ```bash
 uv run python -m app.media_to_db
 ```
-
-Run the tests against Postgres with `TEST_DATABASE_URL=postgresql://.../pi4c_test uv run pytest`
-(a throwaway database: its tables are dropped first).
 
 ## Classifier (Jev via OpenRouter)
 
@@ -168,7 +153,6 @@ read-back says the place name instead of coordinates.
 app/
   main.py          FastAPI: read API + Telegram webhook
   telegram_cli.py  poll / set-webhook / delete-webhook / whoami
-  migrate_sqlite.py copy data/pi4c.db into Postgres
   media_to_db.py   copy older photos from data/media into the database
   dispatch.py      dedupe + per-resident lock + run flow
   flow.py          conversation state machine (channel-neutral)
