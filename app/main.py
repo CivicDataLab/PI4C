@@ -49,10 +49,9 @@ def health():
     return {"status": "ok", "dry_run": settings.dry_run}
 
 
-async def _json_body(request: Request) -> tuple[bytes, dict]:
-    raw = await request.body()
+async def _json_body(request: Request) -> dict:
     try:
-        return raw, json.loads(raw)
+        return json.loads(await request.body())
     except json.JSONDecodeError:
         raise HTTPException(400, "Invalid JSON")
 
@@ -67,7 +66,7 @@ async def telegram_webhook(request: Request, background: BackgroundTasks):
         given = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
         if not secrets.compare_digest(given, settings.telegram_webhook_secret):
             raise HTTPException(403, "Bad secret token")
-    _, body = await _json_body(request)
+    body = await _json_body(request)
     if msg := parse_update(body):
         background.add_task(process_incoming, msg, telegram)
     return {"ok": True}

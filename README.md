@@ -54,13 +54,7 @@ in `.env`. Tables are created on startup.
 Photos are stored in the database too (`media_files`), written
 with the report when the resident confirms. During the conversation they sit in `data/media/`,
 since the session state can't hold file bytes; that copy is left in place. The API serves files
-from the database, falling back to disk for reports made before this.
-
-To copy older photos from disk into the database (safe to re-run):
-
-```bash
-uv run python -m app.media_to_db
-```
+from the database.
 
 ## Classifier (keyword rules)
 
@@ -149,7 +143,6 @@ read-back says the place name instead of coordinates.
 app/
   main.py          FastAPI: read API + Telegram webhook
   telegram_cli.py  poll / set-webhook / delete-webhook / whoami
-  media_to_db.py   copy older photos from data/media into the database
   dispatch.py      dedupe + per-resident lock + run flow
   flow.py          conversation state machine (channel-neutral)
   messenger.py     Incoming type + Messenger interface

@@ -1,10 +1,9 @@
 import csv
 import io
 from collections.abc import Iterator
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -147,9 +146,6 @@ def get_media(
             media_type=media.mime_type or "application/octet-stream",
             headers={"ETag": f'"{media.file.sha256}"', "Cache-Control": "private, max-age=86400"},
         )
-    # Reports from before files were stored in the database (see app.media_to_db)
-    if media.path and Path(media.path).is_file():
-        return FileResponse(media.path, media_type=media.mime_type)
     raise HTTPException(404, "Media not found")
 
 

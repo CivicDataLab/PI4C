@@ -32,7 +32,6 @@ CHOOSE_FROM_BUTTONS = "దయచేసి ఈ సందేశం తర్వా
 CHOOSE_SUBCATEGORY = "ఇది ఏ రకమైన సమస్య?"
 
 # Choose
-LIST_BUTTON = "ఎంచుకోండి"
 
 # NEW: Type a short description of the problem and send it. Telugu or English, either is fine.
 DESCRIBE = "సమస్యను క్లుప్తంగా టైప్ చేసి పంపండి. తెలుగు లేదా ఇంగ్లీష్, ఏదైనా సరే."
@@ -90,7 +89,6 @@ TYPE_PLACE = (
 
 # NEW: Which of these is the place? Tap it, or type its number.
 CHOOSE_PLACE = "వీటిలో ఏది ఆ ప్రదేశం? దాన్ని నొక్కండి, లేదా దాని సంఖ్యను టైప్ చేయండి."
-PLACE_SECTION = "ప్రదేశాలు"  # NEW: Places
 PLACE_NONE = "వీటిలో ఏదీ కాదు"  # NEW: None of these
 
 # NEW: Place search is not working right now. Please tap "Live location" or "Choose a location".
@@ -143,7 +141,6 @@ BTN_CANCEL = "రద్దు చేయండి"  # Cancel
 
 # What would you like to edit?
 EDIT = "దేనిని మార్చాలి?"
-EDIT_SECTION = "మార్పు"  # Edit
 EDIT_OPTIONS: list[tuple[str, str]] = [
     ("category", "వర్గం"),  # Category
     ("description", "వివరణ"),  # Description

@@ -304,7 +304,7 @@ class Conversation:
             case State.SUBCATEGORY:
                 cat = taxonomy.category(d["category"])
                 rows = [(f"sub:{x['id']}", i18n.label(x, lang), i18n.label(x, lang, "description")) for x in cat["subcategories"]]
-                self._send_list(s, prefix + self.M.CHOOSE_SUBCATEGORY, i18n.label(cat, lang), rows)
+                self._send_list(s, prefix + self.M.CHOOSE_SUBCATEGORY, rows)
             case State.DESCRIBE:
                 self._send_text(s, prefix + self.M.DESCRIBE)
             case State.LOCATION:
@@ -312,7 +312,7 @@ class Conversation:
             case State.LOCATION_PICK:
                 rows = [(f"place:{i}", p["name"], p["address"]) for i, p in enumerate(d.get("_places", []))]
                 rows.append(("place:retry", self.M.PLACE_NONE, ""))
-                self._send_list(s, prefix + self.M.CHOOSE_PLACE, self.M.PLACE_SECTION, rows)
+                self._send_list(s, prefix + self.M.CHOOSE_PLACE, rows)
             case State.PHOTO:
                 self._send_buttons(s, prefix + self.M.PHOTO, [("photo:skip", self.M.BTN_NO_PHOTO)])
             case State.AFFECTED:
@@ -322,7 +322,7 @@ class Conversation:
                 self._send_buttons(s, prefix + self._readback_body(s), options)
             case State.EDIT:
                 rows = [(f"edit:{v}", t, "") for v, t in self.M.EDIT_OPTIONS]
-                self._send_list(s, prefix + self.M.EDIT, self.M.EDIT_SECTION, rows)
+                self._send_list(s, prefix + self.M.EDIT, rows)
 
     def _readback_body(self, s: ChatSession) -> str:
         d = s.data
@@ -351,9 +351,9 @@ class Conversation:
         self.messenger.send_buttons(s.user_id, body, options)
         self._log_out(s, "buttons")
 
-    def _send_list(self, s: ChatSession, body: str, section: str, rows: list[tuple[str, str, str]]) -> None:
+    def _send_list(self, s: ChatSession, body: str, rows: list[tuple[str, str, str]]) -> None:
         self._set(s, _options=[(rid, title) for rid, title, _ in rows])
-        self.messenger.send_list(s.user_id, body, self.M.LIST_BUTTON, section, rows)
+        self.messenger.send_list(s.user_id, body, rows)
         self._log_out(s, "list")
 
     def _send_location_request(self, s: ChatSession, body: str) -> None:

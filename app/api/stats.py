@@ -83,7 +83,7 @@ def stats_counts(
     return _grouped(db, _group_columns(group_by), conds)
 
 
-def _period(db: Session, interval: str):
+def _period(interval: str):
     """created_at truncated to the start of its day / week (Monday) / month, as YYYY-MM-DD."""
     col = Report.created_at
     if interval == "day":
@@ -102,7 +102,7 @@ def stats_timeseries(
     _=Depends(require_scope("read")),
 ):
     """Reports per day / week / month (UTC) for trend charts. Periods with no reports are omitted."""
-    return _grouped(db, [_period(db, interval).label("period"), *_group_columns(group_by)], conds)
+    return _grouped(db, [_period(interval).label("period"), *_group_columns(group_by)], conds)
 
 
 @router.get("/metrics")

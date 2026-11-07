@@ -30,7 +30,6 @@ def parse_update(update: dict) -> Incoming | None:
             type="reply",
             reply_id=cq.get("data"),
             callback_id=cq["id"],
-            profile_name=cq["from"].get("first_name"),
             raw=update,
         )
 
@@ -44,7 +43,6 @@ def parse_update(update: dict) -> Incoming | None:
         user_id=f"tg:{m['chat']['id']}",
         channel="telegram",
         type="unsupported",
-        profile_name=(m.get("from") or {}).get("first_name"),
         caption=(m.get("caption") or "").strip() or None,
         raw=update,
     )
@@ -113,9 +111,7 @@ class TelegramClient:
         keyboard = [[{"text": title, "callback_data": bid}] for bid, title in buttons]
         self._send(user_id, "buttons", body, options_from(buttons), {"inline_keyboard": keyboard})
 
-    def send_list(
-        self, user_id: str, body: str, button: str, section_title: str, rows: list[tuple[str, str, str]]
-    ) -> None:
+    def send_list(self, user_id: str, body: str, rows: list[tuple[str, str, str]]) -> None:
         # Telegram buttons can't carry descriptions, so they go in the message as a numbered list.
         # Colon, not a dash: screen readers read a colon as a pause but often say "em dash" aloud
         lines = [f"{i}. {title}" + (f": {desc}" if desc else "") for i, (_, title, desc) in enumerate(rows, 1)]

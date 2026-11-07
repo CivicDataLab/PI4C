@@ -20,7 +20,6 @@ CHOOSE_FROM_BUTTONS = "Please tap one of the options after this message, or type
 
 CHOOSE_SUBCATEGORY = "What kind of problem is it?"
 
-LIST_BUTTON = "Choose"
 
 DESCRIBE = "Briefly describe the problem in a text message, in Telugu or English."
 
@@ -62,7 +61,6 @@ TYPE_PLACE = (
 )
 
 CHOOSE_PLACE = "Which of these is the place? Tap it, or type its number."
-PLACE_SECTION = "Places"
 PLACE_NONE = "None of these"
 
 PLACE_SEARCH_FAILED = (
@@ -104,7 +102,6 @@ BTN_EDIT = "Edit"
 BTN_CANCEL = "Cancel"
 
 EDIT = "What would you like to edit?"
-EDIT_SECTION = "Edit"
 EDIT_OPTIONS: list[tuple[str, str]] = [
     ("category", "Category"),
     ("description", "Description"),

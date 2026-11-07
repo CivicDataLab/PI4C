@@ -6,9 +6,9 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from app import fake_inbound as F
-from app import main, media_to_db
+from app import main
 from app.db import SessionLocal
-from app.models import Media, MediaFile
+from app.models import Media
 from tests.conftest import READ, report_from_ack, send, start
 
 PHOTO = b"\xff\xd8\xff\xe0 fake jpeg bytes \xff\xd9"
@@ -52,31 +52,6 @@ def test_photo_is_stored_in_and_served_from_the_database(client, monkeypatch):
     assert r.status_code == 200 and r.content == PHOTO
     assert r.headers["content-type"] == "image/jpeg" and r.headers["etag"]
     assert client.get(media["url"]).status_code == 401
-
-
-def test_media_to_db_moves_older_disk_files(client, monkeypatch, tmp_path):
-    _fake_download(monkeypatch)
-    report = _report_with_photo(client, "913000000002")
-    legacy = tmp_path / "legacy.jpg"
-    legacy.write_bytes(b"older photo")
-    with SessionLocal() as db:
-        media = Media(report_id=report["id"], kind="image", mime_type="image/jpeg", path=str(legacy))
-        gone = Media(report_id=report["id"], kind="image", mime_type="image/jpeg", path=str(tmp_path / "missing.jpg"))
-        db.add_all([media, gone])
-        db.commit()
-        media_id, gone_id = media.id, gone.id
-
-    url = f"/api/v1/reports/{report['id']}/media/{media_id}"
-    assert client.get(url, headers=READ).content == b"older photo"  # disk fallback
-
-    media_to_db.main()
-    media_to_db.main()  # second run changes nothing
-    with SessionLocal() as db:
-        assert db.get(MediaFile, media_id).data == b"older photo"
-        assert db.get(MediaFile, gone_id) is None
-    legacy.unlink()
-    assert client.get(url, headers=READ).content == b"older photo"
-    assert client.get(f"/api/v1/reports/{report['id']}/media/{gone_id}", headers=READ).status_code == 404
 
 
 def test_summary(client, monkeypatch):
