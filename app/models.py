@@ -34,7 +34,7 @@ class ChatSession(Base):
 
 
 class InboundMessage(Base):
-    """Seen delivery keys (Telegram update_id / WhatsApp message id), so retries are processed once."""
+    """Seen delivery keys (Telegram update_id), so retries are processed once."""
 
     __tablename__ = "inbound_messages"
 

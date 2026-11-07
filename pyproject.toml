@@ -1,7 +1,7 @@
 [project]
 name = "pi4c"
 version = "0.1.0"
-description = "PI4C accessible grievance chatbot (WhatsApp, Tamil) and read API"
+description = "PI4C accessible grievance chatbot (Telegram, Telugu) and read API"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

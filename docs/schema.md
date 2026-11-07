@@ -34,7 +34,7 @@ Complaint number shown to residents is `PI4C-` + `id` padded to 6 digits (`PI4C-
 | `interaction_id` | varchar(36) | no | UUID of the conversation that produced it (indexed) |
 | `created_at` | timestamp | no | Indexed |
 | `updated_at` | timestamp | no | Set on every change (indexed) |
-| `channel` | varchar(16) | no | `telegram` (or `whatsapp` later) |
+| `channel` | varchar(16) | no | `telegram` |
 | `language` | varchar(8) | no | `te` or `en` |
 | `category` | varchar(32) | no | `accessibility`, `civic` or `disaster` (indexed) |
 | `subcategory` | varchar(64) | no | Sub-type the resident picked (from `data/taxonomy.json`) |
@@ -136,7 +136,7 @@ The only table that holds the raw chat ID. Sessions expire after 30 minutes of s
 
 | Column | Type | Null | Meaning |
 |---|---|---|---|
-| `key` | varchar(160), PK | no | Telegram `update_id` (or WhatsApp message id), so a retried delivery is handled once |
+| `key` | varchar(160), PK | no | Telegram `update_id`, so a retried delivery is handled once |
 | `received_at` | timestamp | no | |
 
 ## Not in the database

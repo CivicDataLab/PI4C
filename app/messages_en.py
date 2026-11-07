@@ -1,7 +1,5 @@
 """English resident-facing text. Must define the same names as messages_te.py (tests check this).
 
-WhatsApp limits apply here too: button title ≤ 20, row title ≤ 24, row description ≤ 72.
-
 Screen readers (TalkBack, VoiceOver) read every emoji by name ("round pushpin Live location"),
 say "bullet" and often "em dash" aloud, so resident-facing text uses none of them: plain words,
 numbered lists that match the button order, and colons instead of dashes.

@@ -3,23 +3,20 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
 
 from app.api import clusters, meta, reports, stats
 from app.config import get_settings
 from app.db import init_db
 from app.dispatch import process_incoming
 from app.telegram import TelegramClient, parse_update
-from app.whatsapp import WhatsAppClient, parse_webhook, verify_signature
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # Telegram request URLs contain the bot token
 
 settings = get_settings()
 telegram = TelegramClient(settings)
-whatsapp = WhatsAppClient(settings)
 
 
 @asynccontextmanager
@@ -75,26 +72,3 @@ async def telegram_webhook(request: Request, background: BackgroundTasks):
         background.add_task(process_incoming, msg, telegram)
     return {"ok": True}
 
-
-# --- WhatsApp Cloud API (kept for later) --------------------------------------------------
-
-
-@app.get("/whatsapp/webhook", tags=["whatsapp"], response_class=PlainTextResponse)
-def whatsapp_verify(
-    mode: str | None = Query(None, alias="hub.mode"),
-    token: str | None = Query(None, alias="hub.verify_token"),
-    challenge: str | None = Query(None, alias="hub.challenge"),
-):
-    if mode == "subscribe" and token == settings.wa_verify_token:
-        return challenge or ""
-    raise HTTPException(403, "Verification failed")
-
-
-@app.post("/whatsapp/webhook", tags=["whatsapp"])
-async def whatsapp_webhook(request: Request, background: BackgroundTasks):
-    raw, body = await _json_body(request)
-    if settings.wa_app_secret and not verify_signature(raw, request.headers.get("X-Hub-Signature-256"), settings.wa_app_secret):
-        raise HTTPException(403, "Bad signature")
-    for msg in parse_webhook(body):
-        background.add_task(process_incoming, msg, whatsapp)
-    return {"status": "ok"}

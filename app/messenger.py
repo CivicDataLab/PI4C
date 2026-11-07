@@ -1,4 +1,4 @@
-"""Channel-neutral message types shared by the Telegram and WhatsApp adapters.
+"""Channel-neutral message types used by the Telegram adapter.
 
 The conversation flow only talks to a Messenger, so adding or switching a channel means
 writing one adapter: parse its inbound payloads into Incoming, and implement these sends.
@@ -17,8 +17,8 @@ OUTBOX: list[dict] = []
 @dataclass
 class Incoming:
     key: str  # unique per delivery, used to drop retries
-    user_id: str  # channel-prefixed: "tg:<chat id>" or "wa:<phone>"
-    channel: str  # telegram | whatsapp
+    user_id: str  # channel-prefixed: "tg:<chat id>"
+    channel: str  # telegram
     type: str  # text | reply | location | image | unsupported (voice notes, stickers, files...)
     text: str | None = None
     reply_id: str | None = None

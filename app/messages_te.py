@@ -2,8 +2,7 @@
 
 English gloss is in the comment beside each string. Category/sub-category labels live in
 data/taxonomy.json. "Persons with disabilities" is rendered as దివ్యాంగులు, the term used by the
-Andhra Pradesh government. WhatsApp limits (checked by tests/test_units.py): button title ≤ 20,
-list button ≤ 20, row title ≤ 24, row description ≤ 72, interactive body ≤ 1024.
+Andhra Pradesh government.
 
 Screen readers (TalkBack, VoiceOver) read every emoji by name, say "bullet" and often "em dash"
 aloud, so resident-facing text uses none of them: plain words, numbered lists that match the
@@ -74,7 +73,7 @@ CHOOSE_ON_MAP = (
     "4. \"ఎంచుకున్న లొకేషన్‌ను పంపండి\" ను నొక్కండి"
 )
 
-# Telegram keyboard buttons (WhatsApp draws its own location button)
+# Telegram keyboard buttons
 BTN_SEND_LOCATION = "లైవ్ లొకేషన్"  # Live location
 BTN_CHOOSE_LOCATION = "ప్రదేశాన్ని ఎంచుకోండి"  # Choose a location
 BTN_TYPE_PLACE = "ప్రదేశం పేరు టైప్ చేయండి"  # NEW: Type the place name

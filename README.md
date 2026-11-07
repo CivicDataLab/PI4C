@@ -9,8 +9,7 @@ repeat reports of the same problem, and exposed through a REST API for downstrea
 Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (Jev) ─► cluster ─► /api/v1/*
 ```
 
-The flow is channel-neutral (`app/messenger.py`). Telegram is the active adapter; a WhatsApp Cloud
-API adapter is kept in `app/whatsapp.py` for later.
+The flow is channel-neutral (`app/messenger.py`); Telegram is the only adapter.
 
 ## Quick start
 
@@ -167,7 +166,7 @@ read-back says the place name instead of coordinates.
 
 ```
 app/
-  main.py          FastAPI: read API + Telegram/WhatsApp webhooks
+  main.py          FastAPI: read API + Telegram webhook
   telegram_cli.py  poll / set-webhook / delete-webhook / whoami
   migrate_sqlite.py copy data/pi4c.db into Postgres
   media_to_db.py   copy older photos from data/media into the database
@@ -175,8 +174,7 @@ app/
   flow.py          conversation state machine (channel-neutral)
   messenger.py     Incoming type + Messenger interface
   places.py        typed place-name search (LocationIQ / Nominatim), limited to the city
-  telegram.py      Telegram adapter (active)
-  whatsapp.py      WhatsApp Cloud API adapter (later)
+  telegram.py      Telegram adapter
   messages_te.py   Telugu strings (messages_en.py: English)
   classify.py      Jev decisions / rules triage
   cluster.py       repeat-report grouping

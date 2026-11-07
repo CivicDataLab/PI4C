@@ -12,8 +12,6 @@ os.environ.update(
         "DRY_RUN": "true",
         "TELEGRAM_BOT_TOKEN": "",
         "TELEGRAM_WEBHOOK_SECRET": "",
-        "WA_APP_SECRET": "",
-        "WA_VERIFY_TOKEN": "verify-me",
         "API_KEYS": "reader:read:read-key,writer:write:write-key",
         "CORS_ORIGINS": "https://dashboard.example",
         "OPENROUTER_API_KEY": "",

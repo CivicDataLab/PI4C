@@ -7,30 +7,14 @@ import pytest
 from app import classify, geo, i18n, taxonomy
 from app.config import Settings
 from app.models import Report
-from app.whatsapp import BODY_MAX, BUTTON_TITLE_MAX, ROW_DESC_MAX, ROW_TITLE_MAX
 
 
 @pytest.mark.parametrize("lang", sorted(i18n.MESSAGES))
-def test_whatsapp_text_limits(lang):
-    """WhatsApp rejects (or we would truncate) titles over these lengths."""
-    M = i18n.messages(lang)
-    # Category labels are excluded: Telegram (the live channel) allows long buttons, and the agreed
-    # English wording ("Disaster/Climate related Issue") is 30 chars. WhatsApp would clip it.
-    titles = [t for _, t in i18n.LANGUAGE_OPTIONS]
-    titles += [t for _, t in M.AFFECTED_OPTIONS] + [M.BTN_NO_PHOTO, M.BTN_CONFIRM, M.BTN_EDIT, M.BTN_CANCEL, M.LIST_BUTTON]
-    for t in titles:
-        assert len(t) <= BUTTON_TITLE_MAX, t
+def test_taxonomy_is_complete(lang):
     for cat in taxonomy.categories():
-        assert len(cat["subcategories"]) <= 10
         for sub in cat["subcategories"]:
             assert sub.get(f"label_{lang}") and sub.get(f"description_{lang}"), (lang, sub["id"])
-            assert len(i18n.label(sub, lang)) <= ROW_TITLE_MAX, sub
-            assert len(i18n.label(sub, lang, "description")) <= ROW_DESC_MAX, sub
             assert sub["default_department"] in taxonomy.department_ids(), sub["id"]
-    for _, t in M.EDIT_OPTIONS:
-        assert len(t) <= ROW_TITLE_MAX
-    for b in (M.WELCOME, M.AFFECTED, M.LOCATION, M.LOCATION_RETRY, M.readback("x", "y", "z" * 300, "loc", 1, "a")):
-        assert len(b) <= BODY_MAX
 
 
 def test_languages_define_the_same_strings():
