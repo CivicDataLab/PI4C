@@ -1,6 +1,7 @@
 from app import fake_inbound as F
 from app import messages_te as M
 from app.messenger import OUTBOX
+from app.places import Place
 from app import messages_en as EN
 from tests.conftest import body, kind, last, report_from_ack, send, start, walk_to_readback
 
@@ -43,14 +44,15 @@ def test_invalid_input_reprompts_without_advancing(client):
     assert body(last()).startswith(M.CHOOSE_FROM_BUTTONS)
 
 
-def test_location_is_asked_right_after_menu_with_two_options(client):
+def test_location_is_asked_right_after_menu_with_three_options(client):
     wa = "911000000004"
     start(client, wa)
     send(client, F.reply(wa, "cat:civic"))
     assert kind(last()) == "location_request" and body(last()) == M.LOCATION
-    assert [o["title"] for o in last()["options"]] == [M.BTN_SEND_LOCATION, M.BTN_CHOOSE_LOCATION]
+    assert [o["title"] for o in last()["options"]] == [M.BTN_SEND_LOCATION, M.BTN_CHOOSE_LOCATION, M.BTN_TYPE_PLACE]
     keyboard = last()["payload"]["reply_markup"]["keyboard"]
-    assert keyboard[0][0]["request_location"] is True and "request_location" not in keyboard[1][0]
+    assert keyboard[0][0]["request_location"] is True
+    assert all("request_location" not in row[0] for row in keyboard[1:])
 
 
 def test_choose_a_location_explains_map_picker(client):
@@ -64,13 +66,115 @@ def test_choose_a_location_explains_map_picker(client):
     assert kind(last()) == "list"
 
 
-def test_location_step_requires_shared_location(client):
+def test_location_step_reprompts_for_non_location_input(client):
     wa = "911000000016"
     start(client, wa)
     send(client, F.reply(wa, "cat:civic"))
-    send(client, F.text(wa, "near the temple"))
+    send(client, F.audio(wa))
     assert kind(last()) == "location_request"
     assert body(last()) == M.LOCATION_RETRY
+
+
+JAGADAMBA = [
+    Place("Jagadamba Junction", "Dwaraka Nagar, Visakhapatnam", 17.7124, 83.3030),
+    Place("Jagadamba Theatre", "Town Kotha Road, Visakhapatnam", 17.7121, 83.3025),
+]
+
+
+def _fake_search(results):
+    calls = []
+
+    def search(query, settings, language="en"):
+        calls.append((query, language))
+        return results
+
+    return search, calls
+
+
+def test_typed_place_name_offers_matches_and_saves_the_pick(client, monkeypatch):
+    wa = "911000000030"
+    search, calls = _fake_search(JAGADAMBA)
+    monkeypatch.setattr("app.places.search", search)
+    start(client, wa)
+    send(client, F.reply(wa, "cat:accessibility"))
+    send(client, F.text(wa, M.BTN_TYPE_PLACE))  # the keyboard button
+    assert kind(last()) == "text" and body(last()) == M.TYPE_PLACE
+    send(client, F.text(wa, "jagadamba"))
+    assert calls == [("jagadamba", "te")]
+    assert kind(last()) == "list" and body(last()) == M.CHOOSE_PLACE
+    assert [o["title"] for o in last()["options"]] == ["Jagadamba Junction", "Jagadamba Theatre", M.PLACE_NONE]
+    # Telegram shows the matches as a numbered list in the message, with the area after each name
+    assert "1. Jagadamba Junction: Dwaraka Nagar, Visakhapatnam" in last()["payload"]["text"]
+    send(client, F.text(wa, "1"))  # typed number works like a tap
+    assert body(OUTBOX[-2]) == M.location_saved("Jagadamba Junction")
+    assert kind(last()) == "list"  # sub-category comes next
+
+    send(client, F.reply(wa, "sub:footpath"))
+    send(client, F.text(wa, "broken footpath"))
+    send(client, F.reply(wa, "photo:skip"))
+    send(client, F.reply(wa, "aff:self"))
+    assert "Jagadamba Junction" in body(last())  # read-back says the place, not coordinates
+    send(client, F.reply(wa, "rb:confirm"))
+    report = report_from_ack(client)
+    assert report["location_route"] == "place_search"
+    assert report["location_name"] == "Jagadamba Junction"
+    assert report["location_address"] == "Dwaraka Nagar, Visakhapatnam"
+    assert (report["latitude"], report["longitude"]) == (17.7124, 83.3030)
+
+
+def test_place_name_can_be_typed_straight_away(client, monkeypatch):
+    wa = "911000000031"
+    monkeypatch.setattr("app.places.search", _fake_search(JAGADAMBA)[0])
+    start(client, wa, lang="en")
+    send(client, F.reply(wa, "cat:civic"))
+    send(client, F.text(wa, "jagadamba"))
+    assert kind(last()) == "list" and body(last()) == EN.CHOOSE_PLACE
+
+
+def test_no_match_says_so_and_stays_on_location(client, monkeypatch):
+    wa = "911000000032"
+    monkeypatch.setattr("app.places.search", _fake_search([])[0])
+    start(client, wa)
+    send(client, F.reply(wa, "cat:civic"))
+    send(client, F.text(wa, "ameerpet"))
+    assert kind(last()) == "location_request"
+    assert body(last()) == M.place_not_found("ameerpet")
+
+
+def test_search_failure_points_to_the_buttons(client, monkeypatch):
+    wa = "911000000033"
+    monkeypatch.setattr("app.places.search", _fake_search(None)[0])
+    start(client, wa)
+    send(client, F.reply(wa, "cat:civic"))
+    send(client, F.text(wa, "jagadamba"))
+    assert kind(last()) == "location_request" and body(last()) == M.PLACE_SEARCH_FAILED
+
+
+def test_none_of_these_asks_again_and_a_new_name_searches_again(client, monkeypatch):
+    wa = "911000000034"
+    search, calls = _fake_search(JAGADAMBA)
+    monkeypatch.setattr("app.places.search", search)
+    start(client, wa)
+    send(client, F.reply(wa, "cat:civic"))
+    send(client, F.text(wa, "jagadamba"))
+    send(client, F.reply(wa, "place:retry"))
+    assert kind(last()) == "location_request" and body(last()).startswith(M.TYPE_PLACE)
+    send(client, F.text(wa, "jagadamba junction"))
+    assert kind(last()) == "list"
+    send(client, F.text(wa, "dwaraka nagar"))  # another name instead of picking
+    assert [q for q, _ in calls] == ["jagadamba", "jagadamba junction", "dwaraka nagar"]
+    assert kind(last()) == "list" and body(last()) == M.CHOOSE_PLACE
+
+
+def test_sharing_a_location_while_picking_still_works(client, monkeypatch):
+    wa = "911000000035"
+    monkeypatch.setattr("app.places.search", _fake_search(JAGADAMBA)[0])
+    start(client, wa)
+    send(client, F.reply(wa, "cat:civic"))
+    send(client, F.text(wa, "jagadamba"))
+    send(client, F.location(wa, 17.72, 83.31))
+    assert body(OUTBOX[-2]) == M.LOCATION_RECEIVED
+    assert kind(last()) == "list" and last()["options"][0]["id"].startswith("sub:")
 
 
 def test_edit_location_returns_to_readback(client):
@@ -186,7 +290,7 @@ def test_first_contact_asks_language_and_english_flow(client):
     assert last()["options"][0]["title"] == "Accessibility issue"
     send(client, F.reply(wa, "cat:accessibility"))
     assert body(last()) == EN.LOCATION
-    assert [o["title"] for o in last()["options"]] == ["Live location", "Choose a location"]
+    assert [o["title"] for o in last()["options"]] == ["Live location", "Choose a location", "Type the place name"]
     send(client, F.location(wa, 12.9, 80.0))
     assert OUTBOX[-2]["body"] == EN.LOCATION_RECEIVED
     assert last()["options"][1]["title"] == "Ramp"

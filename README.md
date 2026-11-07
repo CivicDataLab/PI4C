@@ -2,15 +2,14 @@
 
 Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram
 bot in Telugu or English. Each report is structured (category, location, photo, disability context), read back
-for confirmation, triaged by a decision model (barrier type, department, severity), grouped with
+for confirmation, triaged by keyword rules (barrier type, department, severity), grouped with
 repeat reports of the same problem, and exposed through a REST API for downstream systems.
 
 ```
-Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (Jev) ─► cluster ─► /api/v1/*
+Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (rules) ─► cluster ─► /api/v1/*
 ```
 
-The flow is channel-neutral (`app/messenger.py`). Telegram is the active adapter; a WhatsApp Cloud
-API adapter is kept in `app/whatsapp.py` for later.
+The flow is channel-neutral (`app/messenger.py`); Telegram is the only adapter.
 
 ## Quick start
 
@@ -49,51 +48,26 @@ webhook can't run at the same time; `poll` deletes the webhook on start.
 
 ## Database
 
-SQLite (`data/pi4c.db`) by default; Postgres when `DATABASE_URL` is set in `.env`:
+SQLite only for now: `data/pi4c.db`, or another SQLite file set as `DATABASE_URL=sqlite:///...`
+in `.env`. Tables are created on startup.
 
-```
-DATABASE_URL=postgresql://user:password@host:5432/pi4c
-```
-
-Tables are created on startup. Hosted `postgres://` URLs work as given; add `?sslmode=require`
-if the provider asks for it. JSON columns (`chat_sessions.data`, `interaction_logs.payload`) are
-JSONB on Postgres.
-
-Photos are stored in the database too (`media_files`, BYTEA on Postgres), written
+Photos are stored in the database too (`media_files`), written
 with the report when the resident confirms. During the conversation they sit in `data/media/`,
 since the session state can't hold file bytes; that copy is left in place. The API serves files
-from the database, falling back to disk for reports made before this.
+from the database.
 
-To move existing SQLite data across (IDs and complaint numbers are kept; refuses a non-empty target),
-then copy older photos from disk into the database (safe to re-run):
+## Classifier (keyword rules)
 
-```bash
-uv run python -m app.migrate_sqlite
-```
+`app/classify.py` triages each confirmed report without any external service:
 
-```bash
-uv run python -m app.media_to_db
-```
+| Field | Rule |
+|---|---|
+| `barrier_type` | the sub-category the resident picked |
+| `department_id` | the sub-category's `default_department` in `data/taxonomy.json` |
+| `severity` | `high` for urgent words (danger, open manhole, live wire...) or disaster reports, otherwise `medium` |
 
-Run the tests against Postgres with `TEST_DATABASE_URL=postgresql://.../pi4c_test uv run pytest`
-(a throwaway database: its tables are dropped first).
-
-## Classifier (Jev via OpenRouter)
-
-[Jev](https://openrouter.ai/docs/guides/community/jev) is a decision model: it returns typed
-answers with probabilities, not text. `app/classify.py` sends one request to
-`POST https://openrouter.ai/api/alpha/decisions` with three questions:
-
-| Question | Type | Options |
-|---|---|---|
-| `barrier_type` | choice | sub-categories of the category the resident picked |
-| `department` | choice | `data/departments.json`, described by `handles` |
-| `severity` | score | low → medium → high → critical |
-
-Answers below `CLASSIFY_MIN_CONFIDENCE` (0.6) keep the resident's own choice / the rule default and
-set `needs_review`. Probabilities and cost are stored in the interaction log. With no
-`OPENROUTER_API_KEY`, keyword rules are used. Jev returns no text, so `summary_en` and
-`description_en` stay empty.
+A report whose default department isn't in `data/departments.json` gets `needs_review`.
+`summary_en`, `description_en`, `confidence` and `classifier_model` stay empty.
 
 ## Conversation
 
@@ -101,7 +75,8 @@ set `needs_review`. Probabilities and cost are stored in the interaction log. Wi
 |---|---|---|
 | LANGUAGE | తెలుగు / English (first contact and every `/start`) | tap |
 | MENU | 3 buttons: Accessibility / General Civic / Disaster-Climate | tap, or type 1–3 |
-| LOCATION | **Live location** and **Choose a location** keyboard buttons | device location, live location, or a place picked via the attach (paperclip) menu → Location ("Choose a location" replies with those steps) |
+| LOCATION | **Live location**, **Choose a location** and **Type the place name** keyboard buttons | device location, live location, a place picked via the attach (paperclip) menu → Location ("Choose a location" replies with those steps), or a typed place name |
+| LOCATION_PICK | up to 5 matching places in Visakhapatnam as a numbered list, plus "None of these" | tap, type the number, or type another name to search again |
 | SUBCATEGORY | numbered list + buttons | tap, or type the number |
 | DESCRIBE | free text prompt | typed text, or a photo with a caption (voice notes are refused) |
 | PHOTO | optional, "No photo" button | photo or skip |
@@ -121,7 +96,7 @@ Only private chats are handled; group messages are ignored.
 | `GET /reports/{id}` | read | full record incl. media links |
 | `PATCH /reports/{id}` | write | status, status_note, department_id, severity, municipal_subject, needs_review |
 | `GET /reports/{id}/media/{media_id}` | read | photo (from the database) |
-| `GET /reports/{id}/log` | write | stage-wise interaction log incl. classifier probabilities |
+| `GET /reports/{id}/log` | write | stage-wise interaction log |
 | `GET /reports.geojson` | read | same filters, GeoJSON points |
 | `GET /reports.csv` | read | same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
 | `GET /clusters`, `/clusters/{id}` | read | distinct problems with report counts |
@@ -142,6 +117,19 @@ scripts) just send the `X-API-Key` header. A web dashboard calling the API from 
 another site also needs its address in `CORS_ORIGINS`; note that a key in browser code is
 visible to anyone using that page.
 
+## Place search (typed place names)
+
+Residents who can't share a location, or would rather not drag a map pin (screen-reader users
+especially), type a landmark, shop, road or area. `app/places.py` searches it and the bot offers
+the matches as a numbered list; the pick is stored with `location_route = place_search`, and the
+read-back says the place name instead of coordinates.
+
+- With `LOCATIONIQ_API_KEY` set, searches go to [LocationIQ](https://locationiq.com) (free plan, no card).
+- Without it, the public OpenStreetMap Nominatim server is used: free and keyless, limited to one
+  search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
+- Results are kept inside `PLACE_SEARCH_BBOX` (`lon_min,lat_min,lon_max,lat_max`), Visakhapatnam's GVMC
+  area by default, so a name like "Ameerpet" (Hyderabad) finds nothing. Shared locations are not limited.
+
 ## Configuration you'll want to edit
 
 - `data/departments.json`: **placeholder** department list. `handles` becomes the classifier's option description.
@@ -153,17 +141,15 @@ visible to anyone using that page.
 
 ```
 app/
-  main.py          FastAPI: read API + Telegram/WhatsApp webhooks
+  main.py          FastAPI: read API + Telegram webhook
   telegram_cli.py  poll / set-webhook / delete-webhook / whoami
-  migrate_sqlite.py copy data/pi4c.db into Postgres
-  media_to_db.py   copy older photos from data/media into the database
   dispatch.py      dedupe + per-resident lock + run flow
   flow.py          conversation state machine (channel-neutral)
   messenger.py     Incoming type + Messenger interface
-  telegram.py      Telegram adapter (active)
-  whatsapp.py      WhatsApp Cloud API adapter (later)
+  places.py        typed place-name search (LocationIQ / Nominatim), limited to the city
+  telegram.py      Telegram adapter
   messages_te.py   Telugu strings (messages_en.py: English)
-  classify.py      Jev decisions / rules triage
+  classify.py      keyword-rules triage
   cluster.py       repeat-report grouping
   geo.py           ward lookup, distances
   api/             REST endpoints
@@ -174,8 +160,6 @@ tests/
 
 ## Not yet done
 
-- Photos aren't sent to Jev yet (it accepts images).
 - No status notifications back to residents.
 - Telugu strings need native-speaker and OPD review.
 - No municipal grievance-system connector; downstream systems pull from the API.
-- The Decisions API is under `/api/alpha/`, so its shape may change.

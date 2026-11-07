@@ -13,25 +13,12 @@ class Settings(BaseSettings):
     data_dir: Path = BASE_DIR / "data"
     media_dir: Path = BASE_DIR / "data" / "media"
 
-    # Capture outbound messages instead of calling Telegram/WhatsApp (simulator, tests)
+    # Capture outbound messages instead of calling Telegram (simulator, tests)
     dry_run: bool = False
 
     # Telegram (active channel)
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
-
-    # WhatsApp Cloud API (kept for later)
-    wa_phone_number_id: str = ""
-    wa_access_token: str = ""
-    wa_verify_token: str = "change-me"
-    wa_app_secret: str = ""
-    wa_graph_version: str = "v23.0"
-
-    # Classifier: OpenRouter Decisions API; rules-only when key or model is blank
-    openrouter_api_key: str = ""
-    openrouter_model: str = "typesafe/jev-1.14"
-    openrouter_timeout_s: float = 30.0
-    classify_min_confidence: float = 0.6
 
     # Read API: "name:scope:key,..."
     api_keys: str = ""
@@ -41,6 +28,12 @@ class Settings(BaseSettings):
     reporter_hash_secret: str = "change-me"
 
     session_timeout_min: int = 30
+
+    # Place search for typed place names: LocationIQ when a key is set, else public Nominatim.
+    # Results are kept inside the box "lon_min,lat_min,lon_max,lat_max" (default: Visakhapatnam, GVMC area)
+    locationiq_api_key: str = ""
+    place_search_bbox: str = "82.95,17.55,83.45,17.95"
+    place_search_timeout_s: float = 8.0
 
     # Clustering: join the nearest open cluster within radius; within strict radius it's a confident match
     cluster_radius_m: float = 50.0

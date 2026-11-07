@@ -1,4 +1,4 @@
-"""Channel-neutral message types shared by the Telegram and WhatsApp adapters.
+"""Channel-neutral message types used by the Telegram adapter.
 
 The conversation flow only talks to a Messenger, so adding or switching a channel means
 writing one adapter: parse its inbound payloads into Incoming, and implement these sends.
@@ -17,12 +17,11 @@ OUTBOX: list[dict] = []
 @dataclass
 class Incoming:
     key: str  # unique per delivery, used to drop retries
-    user_id: str  # channel-prefixed: "tg:<chat id>" or "wa:<phone>"
-    channel: str  # telegram | whatsapp
+    user_id: str  # channel-prefixed: "tg:<chat id>"
+    channel: str  # telegram
     type: str  # text | reply | location | image | unsupported (voice notes, stickers, files...)
     text: str | None = None
     reply_id: str | None = None
-    reply_title: str | None = None
     latitude: float | None = None
     longitude: float | None = None
     location_name: str | None = None
@@ -30,7 +29,6 @@ class Incoming:
     media_id: str | None = None
     mime_type: str | None = None
     caption: str | None = None
-    profile_name: str | None = None
     callback_id: str | None = None  # Telegram button taps must be acknowledged
     raw: dict = field(default_factory=dict, repr=False)
 
@@ -42,12 +40,12 @@ class Messenger(Protocol):
 
     def send_buttons(self, user_id: str, body: str, buttons: list[tuple[str, str]]) -> None: ...
 
-    def send_list(
-        self, user_id: str, body: str, button: str, section_title: str, rows: list[tuple[str, str, str]]
-    ) -> None: ...
+    def send_list(self, user_id: str, body: str, rows: list[tuple[str, str, str]]) -> None: ...
 
-    def send_location_request(self, user_id: str, body: str, current_label: str, choose_label: str) -> None:
-        """Offer 'share my current/live location' and 'choose a place on the map'."""
+    def send_location_request(
+        self, user_id: str, body: str, current_label: str, choose_label: str, type_label: str
+    ) -> None:
+        """Offer 'share my current/live location', 'choose a place on the map' and 'type the place name'."""
         ...
 
     def download_media(self, media_id: str, dest_dir: Path) -> Path | None: ...

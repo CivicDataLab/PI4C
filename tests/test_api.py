@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import json
 
 from app import fake_inbound as F
@@ -98,26 +96,3 @@ def test_telegram_ignores_group_and_edited_messages(client):
     for update in (group, edited):
         assert client.post("/telegram/webhook", json=update).status_code == 200
     assert OUTBOX == []
-
-
-def _wa_text(wa_id: str, text: str) -> dict:
-    message = {"from": wa_id, "id": "wamid.test1", "timestamp": "0", "type": "text", "text": {"body": text}}
-    return {"entry": [{"changes": [{"value": {"contacts": [{"wa_id": wa_id}], "messages": [message]}}]}]}
-
-
-def test_whatsapp_webhook_verification(client):
-    ok = client.get("/whatsapp/webhook", params={"hub.mode": "subscribe", "hub.verify_token": "verify-me", "hub.challenge": "42"})
-    assert ok.status_code == 200 and ok.text == "42"
-    bad = client.get("/whatsapp/webhook", params={"hub.mode": "subscribe", "hub.verify_token": "wrong", "hub.challenge": "42"})
-    assert bad.status_code == 403
-
-
-def test_whatsapp_signature_and_flow(client, monkeypatch):
-    monkeypatch.setattr(get_settings(), "wa_app_secret", "s3cret")
-    raw = json.dumps(_wa_text("919800000001", "hi")).encode()
-    headers = {"Content-Type": "application/json"}
-    assert client.post("/whatsapp/webhook", content=raw, headers=headers).status_code == 403
-    sig = "sha256=" + hmac.new(b"s3cret", raw, hashlib.sha256).hexdigest()
-    r = client.post("/whatsapp/webhook", content=raw, headers={**headers, "X-Hub-Signature-256": sig})
-    assert r.status_code == 200
-    assert OUTBOX[-1]["channel"] == "whatsapp" and OUTBOX[-1]["kind"] == "buttons"

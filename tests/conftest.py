@@ -3,20 +3,15 @@ import tempfile
 from pathlib import Path
 
 _tmp = Path(tempfile.mkdtemp(prefix="pi4c-test-"))
-# Set TEST_DATABASE_URL to run against Postgres; its tables are dropped first, so use a throwaway database
-_pg_url = os.environ.get("TEST_DATABASE_URL")
 os.environ.update(
     {
-        "DATABASE_URL": _pg_url or f"sqlite:///{(_tmp / 'test.db').as_posix()}",
+        "DATABASE_URL": f"sqlite:///{(_tmp / 'test.db').as_posix()}",
         "MEDIA_DIR": str(_tmp / "media"),
         "DRY_RUN": "true",
         "TELEGRAM_BOT_TOKEN": "",
         "TELEGRAM_WEBHOOK_SECRET": "",
-        "WA_APP_SECRET": "",
-        "WA_VERIFY_TOKEN": "verify-me",
         "API_KEYS": "reader:read:read-key,writer:write:write-key",
         "CORS_ORIGINS": "https://dashboard.example",
-        "OPENROUTER_API_KEY": "",
     }
 )
 
@@ -33,11 +28,6 @@ WRITE = {"X-API-Key": "write-key"}
 
 @pytest.fixture(scope="session")
 def client():
-    if _pg_url:
-        from app import models  # noqa: F401  registers tables
-        from app.db import Base, engine
-
-        Base.metadata.drop_all(engine)
     with TestClient(app) as c:
         yield c
 

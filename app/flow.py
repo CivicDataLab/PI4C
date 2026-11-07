@@ -1,14 +1,18 @@
 """Conversation state machine for the reporting flow (channel-neutral; Telegram today).
 
-LANGUAGE → MENU → LOCATION → SUBCATEGORY → DESCRIBE → PHOTO → AFFECTED → READBACK → DONE
+LANGUAGE → MENU → LOCATION (→ LOCATION_PICK) → SUBCATEGORY → DESCRIBE → PHOTO → AFFECTED → READBACK → DONE
 
 READBACK can branch to EDIT, which jumps to one step and then returns straight to READBACK.
 Every prompt with options also accepts the option's number ("1", "2"...) or exact title typed
 as text, for residents who find tapping buttons hard.
+
+At LOCATION a typed place name is searched (app.places, limited to the city) and the matches are
+offered as a numbered list in LOCATION_PICK, so nobody has to use GPS or drag a map pin.
 """
 
 import logging
 import uuid
+from dataclasses import asdict
 from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -16,7 +20,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import audit, geo, i18n, pipeline, taxonomy
+from app import audit, geo, i18n, pipeline, places, taxonomy
 from app.config import Settings
 from app.models import ChatSession, Media, MediaFile, Report, utcnow
 from app.messenger import Incoming, Messenger
@@ -31,6 +35,7 @@ class State(StrEnum):
     SUBCATEGORY = "SUBCATEGORY"
     DESCRIBE = "DESCRIBE"
     LOCATION = "LOCATION"
+    LOCATION_PICK = "LOCATION_PICK"
     PHOTO = "PHOTO"
     AFFECTED = "AFFECTED"
     READBACK = "READBACK"
@@ -127,9 +132,14 @@ class Conversation:
 
     def _on_location(self, s: ChatSession, msg: Incoming) -> None:
         if msg.type != "location":
-            if self._choice(s, msg, "loc") == "choose":
+            choice = self._choice(s, msg, "loc")
+            if choice == "choose":
                 # Bots can't open Telegram's map picker; explain the attach → Location route
                 return self._prompt(s, self.M.CHOOSE_ON_MAP)
+            if choice == "type":
+                return self._send_text(s, self.M.TYPE_PLACE)
+            if msg.type == "text" and msg.text:
+                return self._search_place(s, msg.text)
             self._set(s, location_attempts=s.data.get("location_attempts", 0) + 1)
             return self._prompt(s, self.M.LOCATION_RETRY)
         self._set(
@@ -138,9 +148,46 @@ class Conversation:
             longitude=msg.longitude,
             location_name=msg.location_name,
             location_address=msg.location_address,
+            location_route="shared_location",
         )
         self._send_text(s, self.M.LOCATION_RECEIVED)
         self._next(s, State.SUBCATEGORY)
+
+    def _search_place(self, s: ChatSession, query: str) -> None:
+        found = places.search(query, self.settings, s.language or i18n.DEFAULT_LANGUAGE)
+        audit.log_event(self.db, s.interaction_id, "place_search", "system", {"query": query, "results": len(found or [])})
+        s.state = State.LOCATION
+        if found is None:
+            return self._prompt(s, self.M.PLACE_SEARCH_FAILED)
+        if not found:
+            return self._prompt(s, self.M.place_not_found(query))
+        self._set(s, _places=[asdict(p) for p in found], place_query=query)
+        self._goto(s, State.LOCATION_PICK)
+
+    def _on_location_pick(self, s: ChatSession, msg: Incoming) -> None:
+        if msg.type == "location":  # shared a location after all
+            s.state = State.LOCATION
+            return self._on_location(s, msg)
+        choice = self._choice(s, msg, "place")
+        found = s.data.get("_places", [])
+        if choice == "retry":
+            s.state = State.LOCATION
+            return self._prompt(s, self.M.TYPE_PLACE)
+        if choice is not None and choice.isdigit() and int(choice) < len(found):
+            place = found[int(choice)]
+            self._set(
+                s,
+                latitude=place["latitude"],
+                longitude=place["longitude"],
+                location_name=place["name"],
+                location_address=place["address"] or None,
+                location_route="place_search",
+            )
+            self._send_text(s, self.M.location_saved(place["name"]))
+            return self._next(s, State.SUBCATEGORY)
+        if msg.type == "text" and msg.text:
+            return self._search_place(s, msg.text)  # typed another name instead of picking
+        self._prompt(s, self.M.CHOOSE_FROM_BUTTONS)
 
     def _on_photo(self, s: ChatSession, msg: Incoming) -> None:
         if msg.type == "image":
@@ -219,7 +266,7 @@ class Conversation:
             longitude=d["longitude"],
             location_name=d.get("location_name"),
             location_address=d.get("location_address"),
-            location_route="shared_location",
+            location_route=d.get("location_route", "shared_location"),
             ward=geo.find_ward(d["latitude"], d["longitude"]),
             affected=affected,
             pwd_marker=affected in ("self", "caregiver") or d["category"] == "accessibility",
@@ -257,11 +304,15 @@ class Conversation:
             case State.SUBCATEGORY:
                 cat = taxonomy.category(d["category"])
                 rows = [(f"sub:{x['id']}", i18n.label(x, lang), i18n.label(x, lang, "description")) for x in cat["subcategories"]]
-                self._send_list(s, prefix + self.M.CHOOSE_SUBCATEGORY, i18n.label(cat, lang), rows)
+                self._send_list(s, prefix + self.M.CHOOSE_SUBCATEGORY, rows)
             case State.DESCRIBE:
                 self._send_text(s, prefix + self.M.DESCRIBE)
             case State.LOCATION:
                 self._send_location_request(s, lead or self.M.LOCATION)
+            case State.LOCATION_PICK:
+                rows = [(f"place:{i}", p["name"], p["address"]) for i, p in enumerate(d.get("_places", []))]
+                rows.append(("place:retry", self.M.PLACE_NONE, ""))
+                self._send_list(s, prefix + self.M.CHOOSE_PLACE, rows)
             case State.PHOTO:
                 self._send_buttons(s, prefix + self.M.PHOTO, [("photo:skip", self.M.BTN_NO_PHOTO)])
             case State.AFFECTED:
@@ -271,7 +322,7 @@ class Conversation:
                 self._send_buttons(s, prefix + self._readback_body(s), options)
             case State.EDIT:
                 rows = [(f"edit:{v}", t, "") for v, t in self.M.EDIT_OPTIONS]
-                self._send_list(s, prefix + self.M.EDIT, self.M.EDIT_SECTION, rows)
+                self._send_list(s, prefix + self.M.EDIT, rows)
 
     def _readback_body(self, s: ChatSession) -> str:
         d = s.data
@@ -300,15 +351,21 @@ class Conversation:
         self.messenger.send_buttons(s.user_id, body, options)
         self._log_out(s, "buttons")
 
-    def _send_list(self, s: ChatSession, body: str, section: str, rows: list[tuple[str, str, str]]) -> None:
+    def _send_list(self, s: ChatSession, body: str, rows: list[tuple[str, str, str]]) -> None:
         self._set(s, _options=[(rid, title) for rid, title, _ in rows])
-        self.messenger.send_list(s.user_id, body, self.M.LIST_BUTTON, section, rows)
+        self.messenger.send_list(s.user_id, body, rows)
         self._log_out(s, "list")
 
     def _send_location_request(self, s: ChatSession, body: str) -> None:
-        # Recorded so a typed "1"/"2" or the "Choose a location" button text maps back to an option
-        self._set(s, _options=[("loc:current", self.M.BTN_SEND_LOCATION), ("loc:choose", self.M.BTN_CHOOSE_LOCATION)])
-        self.messenger.send_location_request(s.user_id, body, self.M.BTN_SEND_LOCATION, self.M.BTN_CHOOSE_LOCATION)
+        # Recorded so a typed number or a plain keyboard button's text maps back to an option
+        self._set(s, _options=[
+            ("loc:current", self.M.BTN_SEND_LOCATION),
+            ("loc:choose", self.M.BTN_CHOOSE_LOCATION),
+            ("loc:type", self.M.BTN_TYPE_PLACE),
+        ])
+        self.messenger.send_location_request(
+            s.user_id, body, self.M.BTN_SEND_LOCATION, self.M.BTN_CHOOSE_LOCATION, self.M.BTN_TYPE_PLACE
+        )
         self._log_out(s, "location_request")
 
     def _log_out(self, s: ChatSession, kind: str) -> None:

@@ -30,7 +30,6 @@ def parse_update(update: dict) -> Incoming | None:
             type="reply",
             reply_id=cq.get("data"),
             callback_id=cq["id"],
-            profile_name=cq["from"].get("first_name"),
             raw=update,
         )
 
@@ -44,7 +43,6 @@ def parse_update(update: dict) -> Incoming | None:
         user_id=f"tg:{m['chat']['id']}",
         channel="telegram",
         type="unsupported",
-        profile_name=(m.get("from") or {}).get("first_name"),
         caption=(m.get("caption") or "").strip() or None,
         raw=update,
     )
@@ -113,9 +111,7 @@ class TelegramClient:
         keyboard = [[{"text": title, "callback_data": bid}] for bid, title in buttons]
         self._send(user_id, "buttons", body, options_from(buttons), {"inline_keyboard": keyboard})
 
-    def send_list(
-        self, user_id: str, body: str, button: str, section_title: str, rows: list[tuple[str, str, str]]
-    ) -> None:
+    def send_list(self, user_id: str, body: str, rows: list[tuple[str, str, str]]) -> None:
         # Telegram buttons can't carry descriptions, so they go in the message as a numbered list.
         # Colon, not a dash: screen readers read a colon as a pause but often say "em dash" aloud
         lines = [f"{i}. {title}" + (f": {desc}" if desc else "") for i, (_, title, desc) in enumerate(rows, 1)]
@@ -123,15 +119,22 @@ class TelegramClient:
         text = f"{body}\n\n" + "\n".join(lines)
         self._send(user_id, "list", body, options_from(rows), {"inline_keyboard": keyboard}, text=text)
 
-    def send_location_request(self, user_id: str, body: str, current_label: str, choose_label: str) -> None:
-        # The first button makes Telegram send the device's location; the second is a plain text
-        # button, since bots can't open the map picker (the flow replies with how to use Attach → Location)
+    def send_location_request(
+        self, user_id: str, body: str, current_label: str, choose_label: str, type_label: str
+    ) -> None:
+        # The first button makes Telegram send the device's location; the others are plain text
+        # buttons, since bots can't open the map picker (the flow replies with how to use
+        # Attach → Location, or asks for the place name)
         keyboard = {
-            "keyboard": [[{"text": current_label, "request_location": True}], [{"text": choose_label}]],
+            "keyboard": [
+                [{"text": current_label, "request_location": True}],
+                [{"text": choose_label}],
+                [{"text": type_label}],
+            ],
             "resize_keyboard": True,
             "one_time_keyboard": True,
         }
-        options = options_from([("loc:current", current_label), ("loc:choose", choose_label)])
+        options = options_from([("loc:current", current_label), ("loc:choose", choose_label), ("loc:type", type_label)])
         self._send(user_id, "location_request", body, options, keyboard)
 
     def acknowledge(self, msg: Incoming) -> None:

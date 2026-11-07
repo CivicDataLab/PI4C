@@ -7,20 +7,10 @@ from app.config import get_settings
 
 settings = get_settings()
 
-
-def _engine_url(url: str) -> str:
-    # Hosted Postgres (Neon, Supabase, Render...) hands out postgres:// URLs; SQLAlchemy needs a driver
-    for prefix in ("postgres://", "postgresql://"):
-        if url.startswith(prefix):
-            return "postgresql+psycopg://" + url.removeprefix(prefix)
-    return url
-
-
-if settings.database_url.startswith("sqlite"):
-    engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
-else:
-    # pre_ping: a server-side timeout or restart doesn't surface as a failed resident message
-    engine = create_engine(_engine_url(settings.database_url), pool_pre_ping=True, pool_size=5, max_overflow=10)
+# SQLite only for now. DATABASE_URL may point at another SQLite file (the tests do this).
+if not settings.database_url.startswith("sqlite"):
+    raise RuntimeError("DATABASE_URL must be a sqlite:/// URL; only SQLite is supported for now")
+engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

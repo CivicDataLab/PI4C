@@ -2,8 +2,7 @@
 
 English gloss is in the comment beside each string. Category/sub-category labels live in
 data/taxonomy.json. "Persons with disabilities" is rendered as దివ్యాంగులు, the term used by the
-Andhra Pradesh government. WhatsApp limits (checked by tests/test_units.py): button title ≤ 20,
-list button ≤ 20, row title ≤ 24, row description ≤ 72, interactive body ≤ 1024.
+Andhra Pradesh government.
 
 Screen readers (TalkBack, VoiceOver) read every emoji by name, say "bullet" and often "em dash"
 aloud, so resident-facing text uses none of them: plain words, numbered lists that match the
@@ -33,7 +32,6 @@ CHOOSE_FROM_BUTTONS = "దయచేసి ఈ సందేశం తర్వా
 CHOOSE_SUBCATEGORY = "ఇది ఏ రకమైన సమస్య?"
 
 # Choose
-LIST_BUTTON = "ఎంచుకోండి"
 
 # NEW: Type a short description of the problem and send it. Telugu or English, either is fine.
 DESCRIBE = "సమస్యను క్లుప్తంగా టైప్ చేసి పంపండి. తెలుగు లేదా ఇంగ్లీష్, ఏదైనా సరే."
@@ -44,20 +42,23 @@ DESCRIBE_RETRY = "దయచేసి సమస్యను టైప్ చే�
 # NEW: Photo received. Now please type a short description of the problem.
 PHOTO_SAVED_DESCRIBE = "ఫోటో అందింది. ఇప్పుడు సమస్యను క్లుప్తంగా టైప్ చేసి పంపండి."
 
-# Where is the problem? NEW: Two buttons are shown in place of your keyboard:
+# Where is the problem? NEW: Three buttons are shown in place of your keyboard:
 # 1. Live location: sends where you are right now  2. Choose a location: pick the place on the map
+# 3. NEW: Type the place name: a landmark, road or area. NEW: You can also type the place name now.
 LOCATION = (
     "సమస్య ఎక్కడ ఉంది?\n\n"
-    "మీ కీబోర్డ్ స్థానంలో రెండు బటన్‌లు కనిపిస్తాయి:\n"
+    "మీ కీబోర్డ్ స్థానంలో మూడు బటన్‌లు కనిపిస్తాయి:\n"
     "1. లైవ్ లొకేషన్: మీరు ఇప్పుడు ఉన్న ప్రదేశాన్ని పంపుతుంది\n"
-    "2. ప్రదేశాన్ని ఎంచుకోండి: మ్యాప్‌లో ప్రదేశాన్ని గుర్తించవచ్చు"
+    "2. ప్రదేశాన్ని ఎంచుకోండి: మ్యాప్‌లో ప్రదేశాన్ని గుర్తించవచ్చు\n"
+    "3. ప్రదేశం పేరు టైప్ చేయండి: ఏదైనా గుర్తు, దుకాణం, రోడ్డు లేదా ప్రాంతం\n\n"
+    "ప్రదేశం పేరును ఇప్పుడే టైప్ చేసి కూడా పంపవచ్చు."
 )
 
-# Location not received. Please tap "Live location" or "Choose a location".
-# NEW: These buttons are shown in place of your keyboard.
+# NEW: Location not received. Please tap one of the three buttons shown in place of your
+# keyboard, or type the place name.
 LOCATION_RETRY = (
-    "లొకేషన్ అందలేదు. \"లైవ్ లొకేషన్\" లేదా \"ప్రదేశాన్ని ఎంచుకోండి\" బటన్‌ను నొక్కండి. "
-    "ఈ బటన్‌లు మీ కీబోర్డ్ స్థానంలో ఉంటాయి."
+    "లొకేషన్ అందలేదు. మీ కీబోర్డ్ స్థానంలో ఉన్న మూడు బటన్‌లలో ఒకదాన్ని నొక్కండి, "
+    "లేదా ప్రదేశం పేరు టైప్ చేయండి."
 )
 
 # To choose the place on the map: 1. NEW: tap the Attach button, the paperclip next to the message box
@@ -71,12 +72,43 @@ CHOOSE_ON_MAP = (
     "4. \"ఎంచుకున్న లొకేషన్‌ను పంపండి\" ను నొక్కండి"
 )
 
-# Telegram keyboard buttons (WhatsApp draws its own location button)
+# Telegram keyboard buttons
 BTN_SEND_LOCATION = "లైవ్ లొకేషన్"  # Live location
 BTN_CHOOSE_LOCATION = "ప్రదేశాన్ని ఎంచుకోండి"  # Choose a location
+BTN_TYPE_PLACE = "ప్రదేశం పేరు టైప్ చేయండి"  # NEW: Type the place name
 
 # Location received.
 LOCATION_RECEIVED = "లొకేషన్ అందింది."
+
+# NEW: Type the name of the place in Visakhapatnam: a landmark, shop, road or area.
+# For example: Jagadamba Junction.
+TYPE_PLACE = (
+    "విశాఖపట్నంలోని ప్రదేశం పేరు టైప్ చేయండి: ఏదైనా గుర్తు, దుకాణం, రోడ్డు లేదా ప్రాంతం. "
+    "ఉదాహరణకు: జగదాంబ జంక్షన్."
+)
+
+# NEW: Which of these is the place? Tap it, or type its number.
+CHOOSE_PLACE = "వీటిలో ఏది ఆ ప్రదేశం? దాన్ని నొక్కండి, లేదా దాని సంఖ్యను టైప్ చేయండి."
+PLACE_NONE = "వీటిలో ఏదీ కాదు"  # NEW: None of these
+
+# NEW: Place search is not working right now. Please tap "Live location" or "Choose a location".
+PLACE_SEARCH_FAILED = (
+    "ప్రదేశం వెతకడం ఇప్పుడు పనిచేయడం లేదు. దయచేసి \"లైవ్ లొకేషన్\" లేదా \"ప్రదేశాన్ని ఎంచుకోండి\" నొక్కండి."
+)
+
+
+def place_not_found(query: str) -> str:
+    """NEW: No place called "QUERY" was found in Visakhapatnam. Try a nearby landmark or the
+    area name, or use the buttons."""
+    return (
+        f"విశాఖపట్నంలో \"{query}\" అనే ప్రదేశం కనబడలేదు. "
+        "దగ్గరలోని ఏదైనా గుర్తు లేదా ప్రాంతం పేరుతో ప్రయత్నించండి, లేదా బటన్‌లను ఉపయోగించండి."
+    )
+
+
+def location_saved(name: str) -> str:
+    """NEW: Location saved: NAME."""
+    return f"ప్రదేశం నమోదైంది: {name}."
 
 # If you have a photo of the problem, send it. This is optional.
 PHOTO = "సమస్య ఫోటో ఉంటే పంపండి. ఇది ఐచ్ఛికం."
@@ -109,7 +141,6 @@ BTN_CANCEL = "రద్దు చేయండి"  # Cancel
 
 # What would you like to edit?
 EDIT = "దేనిని మార్చాలి?"
-EDIT_SECTION = "మార్పు"  # Edit
 EDIT_OPTIONS: list[tuple[str, str]] = [
     ("category", "వర్గం"),  # Category
     ("description", "వివరణ"),  # Description

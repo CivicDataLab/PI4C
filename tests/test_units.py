@@ -1,36 +1,18 @@
 import re
 
-import httpx
 
 import pytest
 
 from app import classify, geo, i18n, taxonomy
-from app.config import Settings
 from app.models import Report
-from app.whatsapp import BODY_MAX, BUTTON_TITLE_MAX, ROW_DESC_MAX, ROW_TITLE_MAX
 
 
 @pytest.mark.parametrize("lang", sorted(i18n.MESSAGES))
-def test_whatsapp_text_limits(lang):
-    """WhatsApp rejects (or we would truncate) titles over these lengths."""
-    M = i18n.messages(lang)
-    # Category labels are excluded: Telegram (the live channel) allows long buttons, and the agreed
-    # English wording ("Disaster/Climate related Issue") is 30 chars. WhatsApp would clip it.
-    titles = [t for _, t in i18n.LANGUAGE_OPTIONS]
-    titles += [t for _, t in M.AFFECTED_OPTIONS] + [M.BTN_NO_PHOTO, M.BTN_CONFIRM, M.BTN_EDIT, M.BTN_CANCEL, M.LIST_BUTTON]
-    for t in titles:
-        assert len(t) <= BUTTON_TITLE_MAX, t
+def test_taxonomy_is_complete(lang):
     for cat in taxonomy.categories():
-        assert len(cat["subcategories"]) <= 10
         for sub in cat["subcategories"]:
             assert sub.get(f"label_{lang}") and sub.get(f"description_{lang}"), (lang, sub["id"])
-            assert len(i18n.label(sub, lang)) <= ROW_TITLE_MAX, sub
-            assert len(i18n.label(sub, lang, "description")) <= ROW_DESC_MAX, sub
             assert sub["default_department"] in taxonomy.department_ids(), sub["id"]
-    for _, t in M.EDIT_OPTIONS:
-        assert len(t) <= ROW_TITLE_MAX
-    for b in (M.WELCOME, M.AFFECTED, M.LOCATION, M.LOCATION_RETRY, M.readback("x", "y", "z" * 300, "loc", 1, "a")):
-        assert len(b) <= BODY_MAX
 
 
 def test_languages_define_the_same_strings():
@@ -72,87 +54,10 @@ def _report(**kw) -> Report:
 
 
 def test_rules_classifier_flags_urgent():
-    result = classify.classify_report(_report(description_raw="తెరిచిన మురుగు కాలువ, ప్రమాదం!"), Settings())
+    result = classify.classify_report(_report(description_raw="తెరిచిన మురుగు కాలువ, ప్రమాదం!"))
     assert result.severity == "high"
     assert result.department_id == "engineering"
     assert result.method == "rules"
-
-
-class _FakeResponse:
-    def __init__(self, payload: dict, status: int = 200):
-        self.status_code = status
-        self.is_error = status >= 400
-        self.text = ""
-        self._payload = payload
-
-    def raise_for_status(self):
-        if self.is_error:
-            raise httpx.HTTPStatusError("err", request=None, response=None)
-
-    def json(self):
-        return self._payload
-
-
-def _decisions(barrier=("ramp", 0.9), dept=("town_planning", 0.85), severity_probs=None, sev_conf=0.9) -> dict:
-    severity_probs = severity_probs or {"0": 0.0, "1": 0.1, "2": 0.85, "3": 0.05}
-    return {
-        "answers": {
-            "barrier_type": {"type": "choice", "choice": barrier[0], "confidence": barrier[1], "probabilities": {barrier[0]: barrier[1]}},
-            "department": {"type": "choice", "choice": dept[0], "confidence": dept[1], "probabilities": {dept[0]: dept[1]}},
-            "severity": {"type": "score", "score": 1.95, "confidence": sev_conf, "probabilities": severity_probs},
-        },
-        "model": "typesafe/jev-1.14-20261001",
-        "usage": {"cost": 0.00002, "input_tokens": 500, "output_tokens": 60},
-    }
-
-
-MODEL_SETTINGS = dict(openrouter_api_key="k", openrouter_model="typesafe/jev-1.14")
-
-
-def test_decision_request_shape():
-    req = classify.build_request(_report(), "typesafe/jev-1.14")
-    q = req["questions"]
-    assert q["barrier_type"]["type"] == "choice" and "ramp" in q["barrier_type"]["criteria"]
-    assert set(q["department"]["criteria"]) == taxonomy.department_ids()
-    assert q["severity"]["type"] == "score" and len(q["severity"]["criteria"]) == 4
-    assert req["state"]["description"] == "footpath broken"
-
-
-def test_decisions_answers_are_used(monkeypatch):
-    calls = []
-    monkeypatch.setattr(classify.httpx, "post", lambda url, **k: calls.append(url) or _FakeResponse(_decisions()))
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert calls == [classify.DECISIONS_URL]
-    assert (result.method, result.barrier_type, result.department_id, result.severity) == ("decisions", "ramp", "town_planning", "high")
-    assert result.needs_review is False
-    assert result.confidence == 0.85
-    assert result.cost_usd == 0.00002
-
-
-def test_low_confidence_keeps_resident_choice_and_flags(monkeypatch):
-    payload = _decisions(barrier=("ramp", 0.4), dept=("town_planning", 0.3), sev_conf=0.2)
-    monkeypatch.setattr(classify.httpx, "post", lambda *a, **k: _FakeResponse(payload))
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert result.barrier_type == "footpath"
-    assert result.department_id == "engineering"  # rules default
-    assert result.severity == "medium"  # rules
-    assert result.needs_review is True
-
-
-def test_unknown_department_falls_back(monkeypatch):
-    payload = _decisions(dept=("nasa", 0.99))
-    monkeypatch.setattr(classify.httpx, "post", lambda *a, **k: _FakeResponse(payload))
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert result.department_id == "engineering" and result.needs_review is True
-
-
-def test_api_error_falls_back_to_rules(monkeypatch):
-    def boom(*a, **k):
-        raise httpx.ConnectError("down")
-
-    monkeypatch.setattr(classify.httpx, "post", boom)
-    result = classify.classify_report(_report(), Settings(**MODEL_SETTINGS))
-    assert result.method == "rules" and result.needs_review is True
 
 
 def test_telegram_parsing():
@@ -166,3 +71,49 @@ def test_telegram_parsing():
     tap = parse_update(F.reply("42", "cat:civic"))
     assert (tap.type, tap.reply_id) == ("reply", "cat:civic") and tap.callback_id
     assert parse_update(F.audio("42")).type == "unsupported"  # voice notes aren't accepted
+
+
+def test_place_search_keeps_only_results_inside_the_city(monkeypatch):
+    from app import places
+    from app.config import Settings
+
+    items = [
+        {"lat": "17.7124", "lon": "83.3030", "name": "Jagadamba Junction", "display_name": "Jagadamba Junction, Dwaraka Nagar, Visakhapatnam, Andhra Pradesh, 530020, India",
+         "address": {"suburb": "Dwaraka Nagar", "city": "Visakhapatnam", "state": "Andhra Pradesh", "country": "India"}},
+        {"lat": "17.7124", "lon": "83.3030", "name": "Jagadamba Junction", "display_name": "duplicate",
+         "address": {"suburb": "Dwaraka Nagar", "city": "Visakhapatnam"}},
+        {"lat": "17.4375", "lon": "78.4483", "name": "Ameerpet", "display_name": "Ameerpet, Hyderabad, Telangana, India", "address": {}},
+    ]
+    seen = {}
+
+    class Resp:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return items
+
+    def fake_get(url, params, headers, timeout):
+        seen.update(url=url, params=params)
+        return Resp()
+
+    monkeypatch.setattr(places.httpx, "get", fake_get)
+    monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
+    found = places.search("jagadamba", Settings(locationiq_api_key="k"), "te")
+    assert found == [places.Place("Jagadamba Junction", "Dwaraka Nagar, Visakhapatnam", 17.7124, 83.3030)]
+    assert seen["url"] == places.LOCATIONIQ_URL
+    assert seen["params"]["bounded"] == 1 and seen["params"]["key"] == "k" and seen["params"]["accept-language"] == "te"
+
+
+def test_place_search_failure_returns_none(monkeypatch):
+    from app import places
+    from app.config import Settings
+
+    def boom(*a, **k):
+        raise places.httpx.ConnectError("down")
+
+    monkeypatch.setattr(places.httpx, "get", boom)
+    monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
+    assert places.search("x", Settings(locationiq_api_key=""), "en") is None
