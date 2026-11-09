@@ -2,7 +2,6 @@
 
 An accessible grievance chatbot. Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram bot in Telugu or English, and every report is structured, triaged, grouped with repeat reports of the same problem, and made available through a REST API for downstream systems.
 
-> Chat IDs never leave the bot: reports carry an HMAC `reporter_hash` instead, and every stage of every conversation is logged so you can see exactly how a report was built.
 
 ---
 
@@ -10,15 +9,11 @@ An accessible grievance chatbot. Residents report accessibility barriers, civic 
 
 Reporting a broken ramp, an open manhole or a flooded street usually means finding the right office, filling in a form in English and describing the location precisely. For people with disabilities, caregivers and residents who are more comfortable in Telugu, that is often where the report ends.
 
-This project removes that barrier by meeting residents in a messaging app they already use. The bot asks one simple question at a time, accepts taps or typed numbers instead of requiring precise touch input, lets residents type a landmark instead of dragging a map pin, and reads the whole report back for confirmation before submitting it. On the other side, municipal teams and dashboards get clean, structured data through an API instead of free-text complaints.
+This project removes that barrier by meeting residents in a messaging app they already use. The bot asks one simple question at a time, accepts taps or typed numbers instead of requiring precise touch input, lets residents type a landmark instead of dragging a map pin, and reads the whole report back for confirmation before submitting it. 
 
 ---
 
 ## How it works
-
-```
-Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (rules) ─► cluster ─► /api/v1/*
-```
 
 1. A resident messages the bot on Telegram.
 2. `telegram.py` receives the update (long polling in development, a webhook when deployed) and `dispatch.py` hands it on, ignoring duplicate deliveries and handling one message per resident at a time.
@@ -174,42 +169,9 @@ Polling and a webhook can't run at the same time; `poll` deletes the webhook whe
 
 **Bot profile:** the description, "About" text and `/start` `/language` `/cancel` menu live in `BOT_DESCRIPTION`, `BOT_SHORT_DESCRIPTION` and `BOT_COMMANDS` in `app/messages_en.py` and `app/messages_te.py`. After editing them, publish with `uv run python -m app.telegram_cli set-profile`. English is the default; Telugu is shown to users whose Telegram app is set to Telugu.
 
-### Place search (`app/places.py`)
-
-Residents who can't share a location, or would rather not drag a map pin (screen-reader users especially), type a landmark, shop, road or area. The bot offers the matches as a numbered list; the pick is stored with `location_route = place_search`, and the read-back says the place name instead of coordinates.
-
-- Searches go to the public OpenStreetMap Nominatim server: free and keyless, limited to one search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
-- Results can be anywhere in India; each match shows its area and town or city, so residents can tell apart places with the same name. Typing the city along with the place ("Jagadamba Junction, Visakhapatnam") narrows the results.
-
-### Classifier (`app/classify.py`)
-
-Each confirmed report is triaged with keyword rules, without any external service:
-
-| Field | Rule |
-|---|---|
-| `barrier_type` | the sub-category the resident picked |
-| `department_id` | the sub-category's `default_department` in `data/taxonomy.json` |
-| `severity` | `high` for urgent words (danger, open manhole, live wire...) or disaster reports, otherwise `medium` |
-
-A report whose default department isn't in `data/departments.json` gets `needs_review`. `summary_en`, `description_en`, `confidence` and `classifier_model` stay empty.
-
-### Clustering (`app/cluster.py`)
-
-A new report joins the nearest open cluster of the same barrier type within 50 m seen in the last 30 days. Matches beyond 20 m are marked "possible" so a person can confirm them; everything else starts a new cluster.
-
-### Storage (`app/db.py`, `app/models.py`)
-
-Everything is stored in one SQLite file, `data/pi4c.db` by default. Tables are created on startup.
-
-On first start the app also generates the secret behind `reporter_hash` and keeps it in the `app_secrets` table, so there is nothing to configure. Keep it with the database when backing up or moving it; if it's lost, residents' new reports no longer link to their old ones.
-
-Photos are stored in the database (`media_files`), written with the report when the resident confirms. During the conversation they sit in `data/media/`, since the session state can't hold file bytes. That folder is deleted when the conversation ends (submitted, cancelled or restarted), and at most once an hour the bot also removes folders left by abandoned conversations. The API serves photos from the database.
-
 ### API (`app/api/`)
 
 All endpoints are under `/api/v1`. **Read endpoints are open to anyone, no key needed.** Write endpoints (changing reports, the conversation log) need an `X-API-Key` header with a `write` key.
-
-> **Testing only.** While this is a prototype, every report is public: exact locations, disability information, free-text descriptions and photos. Put the read endpoints back behind keys before real residents use the bot.
 
 | Endpoint | Access | Description |
 |---|---|---|
