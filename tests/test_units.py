@@ -146,4 +146,4 @@ def test_reporter_hash_secret_is_generated_once_and_kept_in_the_database(client)
         assert db.get(AppSecret, audit.REPORTER_HASH_SECRET).value == secret
         assert audit.reporter_hash(db, "tg:123") == first  # same resident, same hash
         assert audit.reporter_hash(db, "tg:456") != first
-        assert "123" not in first
+        assert len(first) == 32 and all(c in "0123456789abcdef" for c in first)  # hex, not the chat ID
