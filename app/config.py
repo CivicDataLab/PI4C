@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     data_dir: Path = BASE_DIR / "data"
     media_dir: Path = BASE_DIR / "data" / "media"
 
-    # Capture outbound messages instead of calling Telegram (simulator, tests)
+    # Capture outbound messages instead of calling Telegram (tests)
     dry_run: bool = False
 
     # Telegram (active channel)
@@ -29,9 +29,8 @@ class Settings(BaseSettings):
 
     session_timeout_min: int = 30
 
-    # Place search for typed place names: LocationIQ when a key is set, else public Nominatim.
+    # Place search for typed place names (public OpenStreetMap Nominatim).
     # Results are kept inside the box "lon_min,lat_min,lon_max,lat_max" (default: Visakhapatnam, GVMC area)
-    locationiq_api_key: str = ""
     place_search_bbox: str = "82.95,17.55,83.45,17.95"
     place_search_timeout_s: float = 8.0
 

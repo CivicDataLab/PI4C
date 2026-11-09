@@ -101,10 +101,10 @@ def test_place_search_keeps_only_results_inside_the_city(monkeypatch):
 
     monkeypatch.setattr(places.httpx, "get", fake_get)
     monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
-    found = places.search("jagadamba", Settings(locationiq_api_key="k"), "te")
+    found = places.search("jagadamba", Settings(), "te")
     assert found == [places.Place("Jagadamba Junction", "Dwaraka Nagar, Visakhapatnam", 17.7124, 83.3030)]
-    assert seen["url"] == places.LOCATIONIQ_URL
-    assert seen["params"]["bounded"] == 1 and seen["params"]["key"] == "k" and seen["params"]["accept-language"] == "te"
+    assert seen["url"] == places.NOMINATIM_URL
+    assert seen["params"]["bounded"] == 1 and "key" not in seen["params"] and seen["params"]["accept-language"] == "te"
 
 
 def test_place_search_failure_returns_none(monkeypatch):
@@ -116,4 +116,4 @@ def test_place_search_failure_returns_none(monkeypatch):
 
     monkeypatch.setattr(places.httpx, "get", boom)
     monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
-    assert places.search("x", Settings(locationiq_api_key=""), "en") is None
+    assert places.search("x", Settings(), "en") is None
