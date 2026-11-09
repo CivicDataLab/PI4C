@@ -12,10 +12,11 @@ def _make_report(client, chat_id="912000000001", **kw) -> dict:
     return report_from_ack(client)
 
 
-def test_auth_required(client):
-    assert client.get("/api/v1/reports").status_code == 401
-    assert client.get("/api/v1/reports", headers={"X-API-Key": "nope"}).status_code == 401
+def test_read_is_public_but_a_wrong_key_is_rejected(client):
+    assert client.get("/api/v1/reports").status_code == 200
     assert client.get("/api/v1/reports", headers=READ).status_code == 200
+    # a wrong key is rejected rather than silently treated as public
+    assert client.get("/api/v1/reports", headers={"X-API-Key": "nope"}).status_code == 401
 
 
 def test_read_key_cannot_patch(client):
@@ -96,3 +97,19 @@ def test_telegram_ignores_group_and_edited_messages(client):
     for update in (group, edited):
         assert client.post("/telegram/webhook", json=update).status_code == 200
     assert OUTBOX == []
+
+
+
+def test_write_endpoints_still_need_a_write_key(client):
+    report = _make_report(client, "912000000050")
+    assert client.get(f"/api/v1/reports/{report['id']}").status_code == 200
+    assert client.get("/api/v1/stats/summary").status_code == 200
+    assert client.patch(f"/api/v1/reports/{report['id']}", json={"status": "acknowledged"}).status_code == 401
+    assert client.get(f"/api/v1/reports/{report['id']}/log").status_code == 401
+    assert client.get(f"/api/v1/reports/{report['id']}/log", headers=WRITE).status_code == 200
+
+
+def test_read_works_without_any_keys_configured(client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "api_keys", "")
+    assert client.get("/api/v1/taxonomy").status_code == 200
+    assert client.patch("/api/v1/reports/1", json={"status": "acknowledged"}).status_code == 503

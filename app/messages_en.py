@@ -56,8 +56,8 @@ BTN_TYPE_PLACE = "Type the place name"
 LOCATION_RECEIVED = "Location received."
 
 TYPE_PLACE = (
-    "Type the name of the place in Visakhapatnam: a landmark, shop, road or area. "
-    "For example: Jagadamba Junction."
+    "Type the name of the place: a landmark, shop, road or area, and the town or city. "
+    "For example: Jagadamba Junction, Visakhapatnam."
 )
 
 CHOOSE_PLACE = "Which of these is the place? Tap it, or type its number."
@@ -70,8 +70,8 @@ PLACE_SEARCH_FAILED = (
 
 def place_not_found(query: str) -> str:
     return (
-        f"No place called \"{query}\" was found in Visakhapatnam. "
-        "Try a nearby landmark or the area name, or use the buttons."
+        f"No place called \"{query}\" was found. "
+        "Try a nearby landmark, or add the area or city name, or use the buttons."
     )
 
 

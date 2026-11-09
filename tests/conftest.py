@@ -11,7 +11,6 @@ os.environ.update(
         "TELEGRAM_BOT_TOKEN": "",
         "TELEGRAM_WEBHOOK_SECRET": "",
         "API_KEYS": "reader:read:read-key,writer:write:write-key",
-        "CORS_ORIGINS": "https://dashboard.example",
     }
 )
 

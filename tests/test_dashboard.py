@@ -51,7 +51,7 @@ def test_photo_is_stored_in_and_served_from_the_database(client, monkeypatch):
     r = client.get(media["url"], headers=READ)
     assert r.status_code == 200 and r.content == PHOTO
     assert r.headers["content-type"] == "image/jpeg" and r.headers["etag"]
-    assert client.get(media["url"]).status_code == 401
+    assert client.get(media["url"]).status_code == 200  # photos are public too
 
 
 def test_summary(client, monkeypatch):
@@ -116,9 +116,10 @@ def test_csv_export(client, monkeypatch):
     assert report["ref"] not in filtered
 
 
-def test_cors_for_listed_dashboard_origin_only(client):
+def test_cors_allows_any_website(client):
     preflight = {"Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "X-API-Key"}
-    ok = client.options("/api/v1/reports", headers={"Origin": "https://dashboard.example", **preflight})
-    assert ok.status_code == 200 and ok.headers["access-control-allow-origin"] == "https://dashboard.example"
-    other = client.options("/api/v1/reports", headers={"Origin": "https://evil.example", **preflight})
-    assert "access-control-allow-origin" not in other.headers
+    for origin in ("https://dashboard.example", "https://anyone.example"):
+        r = client.options("/api/v1/reports", headers={"Origin": origin, **preflight})
+        assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"
+    r = client.get("/api/v1/reports", headers={"Origin": "https://anyone.example"})
+    assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"

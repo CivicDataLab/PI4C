@@ -33,15 +33,15 @@ app = FastAPI(
 )
 for module in (reports, clusters, stats, meta):
     app.include_router(module.router, prefix="/api/v1")
-if origins := [o.strip() for o in settings.cors_origins.split(",") if o.strip()]:
-    # Keys travel in the X-API-Key header, not cookies, so no credentials mode
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_methods=["GET", "PATCH"],
-        allow_headers=["X-API-Key", "Content-Type"],
-        expose_headers=["Content-Disposition", "ETag"],
-    )
+# Any website may call the API from the browser. Safe because read endpoints are public anyway and
+# keys travel in the X-API-Key header, not cookies (no credentials mode), so a site can't borrow a login.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "PATCH"],
+    allow_headers=["X-API-Key", "Content-Type"],
+    expose_headers=["Content-Disposition", "ETag"],
+)
 
 
 @app.get("/health", tags=["ops"])

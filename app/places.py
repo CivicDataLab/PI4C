@@ -1,8 +1,8 @@
 """Place search for residents who type a place name instead of sharing a location.
 
 Uses the public OpenStreetMap Nominatim server (free, no key; its policy allows one search per
-typed name, but not search-as-you-type, and at most one request per second). Results are limited to
-PLACE_SEARCH_BBOX (Visakhapatnam by default); anything outside it is dropped.
+typed name, but not search-as-you-type, and at most one request per second). Results can be
+anywhere in India; each one names its town or city so same-named places can be told apart.
 """
 
 import logging
@@ -32,21 +32,12 @@ class Place:
     longitude: float
 
 
-def bbox(settings: Settings) -> tuple[float, float, float, float]:
-    """(lon_min, lat_min, lon_max, lat_max)"""
-    lon_min, lat_min, lon_max, lat_max = (float(x) for x in settings.place_search_bbox.split(","))
-    return lon_min, lat_min, lon_max, lat_max
-
-
 def search(query: str, settings: Settings, language: str = "en") -> list[Place] | None:
-    """Up to MAX_RESULTS places inside the bbox; [] when nothing matches, None when the service failed."""
-    lon_min, lat_min, lon_max, lat_max = bbox(settings)
+    """Up to MAX_RESULTS places; [] when nothing matches, None when the service failed."""
     params = {
         "q": query,
         "format": "json",
         "limit": MAX_RESULTS + 3,  # a few spare, since duplicates are dropped
-        "viewbox": f"{lon_min},{lat_max},{lon_max},{lat_min}",
-        "bounded": 1,
         "countrycodes": "in",
         "addressdetails": 1,
         "accept-language": language,
@@ -64,10 +55,7 @@ def search(query: str, settings: Settings, language: str = "en") -> list[Place] 
 
     places, seen = [], set()
     for item in items:
-        lat, lon = float(item["lat"]), float(item["lon"])
-        if not (lat_min <= lat <= lat_max and lon_min <= lon <= lon_max):
-            continue
-        place = _place(item, lat, lon)
+        place = _place(item, float(item["lat"]), float(item["lon"]))
         key = (place.name.casefold(), place.address.casefold())
         if key not in seen:
             seen.add(key)
@@ -79,12 +67,15 @@ def _place(item: dict, lat: float, lon: float) -> Place:
     parts = [p.strip() for p in item.get("display_name", "").split(",") if p.strip()]
     name = item.get("name") or (parts[0] if parts else "")
     addr = item.get("address") or {}
-    # Neighbourhood and area, enough to tell two "Bus stops" apart without reading out the whole address
-    area = [
+    # Up to two local parts plus the town or city, enough to tell two "Bus stands" apart (even in
+    # different cities) without reading out the whole address
+    local = [
         addr.get(k)
-        for k in ("road", "neighbourhood", "suburb", "city_district", "city", "town", "village")
+        for k in ("road", "neighbourhood", "suburb", "city_district")
         if addr.get(k) and addr.get(k) != name
-    ]
+    ][:2]
+    town = next((addr.get(k) for k in ("city", "town", "village", "state_district") if addr.get(k)), None)
+    area = local + ([town] if town and town != name else [])
     if not area:
         skip = {addr.get("state"), addr.get("country"), addr.get("postcode"), "India", "Andhra Pradesh"}
         area = [p for p in parts[1:] if not p.isdigit() and p not in skip]

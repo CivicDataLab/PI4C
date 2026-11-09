@@ -18,9 +18,12 @@ def _parse_keys(raw: str) -> list[tuple[str, str, str]]:
 
 
 def require_scope(scope: str):
-    """Dependency returning the client name. 'write' keys can also read."""
+    """Dependency returning the client name. Read endpoints are public (prototype, testing only):
+    a request without a key is client "public". Write endpoints need a 'write' key."""
 
     def dependency(api_key: str | None = Depends(api_key_header)) -> str:
+        if scope == "read" and not api_key:
+            return "public"
         keys = _parse_keys(get_settings().api_keys)
         if not keys:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "API keys not configured")

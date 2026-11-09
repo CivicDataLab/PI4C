@@ -1,6 +1,6 @@
 # PI4C
 
-An accessible grievance chatbot for Visakhapatnam. Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram bot in Telugu or English, and every report is structured, triaged, grouped with repeat reports of the same problem, and made available through a REST API for downstream systems.
+An accessible grievance chatbot. Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram bot in Telugu or English, and every report is structured, triaged, grouped with repeat reports of the same problem, and made available through a REST API for downstream systems.
 
 > Chat IDs never leave the bot: reports carry an HMAC `reporter_hash` instead, and every stage of every conversation is logged so you can see exactly how a report was built.
 
@@ -120,13 +120,9 @@ Then edit `.env`. It is gitignored; keep real tokens and keys out of `.env.examp
 | Variable | Required | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather |
-| `API_KEYS` | Yes | Comma-separated `name:scope:key` entries; scope is `read` or `write` (write can also read) |
-| `REPORTER_HASH_SECRET` | Yes | Random secret used to pseudonymise chat IDs. Set it before the first real report; changing it later breaks the link between a resident's old and new reports |
+| `API_KEYS` | Yes | Comma-separated `name:scope:key` entries; scope is `read` or `write` (write can also read). Only needed for changing reports and the conversation log, since read endpoints are public |
 | `TELEGRAM_WEBHOOK_SECRET` | When deployed | Random string Telegram sends with every webhook call. Without it, anyone who finds the webhook URL can submit fake reports |
-| `CORS_ORIGINS` | No | Web dashboards on other sites that call the API from the browser (comma-separated, or `*`) |
-| `PLACE_SEARCH_BBOX` | No | Box that typed place searches are limited to, as `lon_min,lat_min,lon_max,lat_max`. Defaults to Visakhapatnam's GVMC area |
 | `DATABASE_URL` | No | Another SQLite file, as `sqlite:///...`. Defaults to `data/pi4c.db` |
-| `DRY_RUN` | No | `true` captures outbound messages instead of calling Telegram (used by the tests) |
 
 ### 4. Run the application
 
@@ -165,7 +161,7 @@ Polling and a webhook can't run at the same time; `poll` deletes the webhook whe
 | LANGUAGE | తెలుగు / English (first contact and every `/start`) | tap |
 | MENU | 3 buttons: Accessibility / General Civic / Disaster-Climate | tap, or type 1–3 |
 | LOCATION | **Live location**, **Choose a location** and **Type the place name** keyboard buttons | device location, live location, a place picked via the attach (paperclip) menu → Location, or a typed place name |
-| LOCATION_PICK | up to 5 matching places in Visakhapatnam as a numbered list, plus "None of these" | tap, type the number, or type another name to search again |
+| LOCATION_PICK | up to 5 matching places as a numbered list, plus "None of these" | tap, type the number, or type another name to search again |
 | SUBCATEGORY | numbered list + buttons | tap, or type the number |
 | DESCRIBE | free text prompt | typed text, or a photo with a caption (voice notes are refused) |
 | PHOTO | optional, "No photo" button | photo or skip |
@@ -183,7 +179,7 @@ Polling and a webhook can't run at the same time; `poll` deletes the webhook whe
 Residents who can't share a location, or would rather not drag a map pin (screen-reader users especially), type a landmark, shop, road or area. The bot offers the matches as a numbered list; the pick is stored with `location_route = place_search`, and the read-back says the place name instead of coordinates.
 
 - Searches go to the public OpenStreetMap Nominatim server: free and keyless, limited to one search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
-- Results are kept inside `PLACE_SEARCH_BBOX`, so a name like "Ameerpet" (Hyderabad) finds nothing. Shared locations are not limited.
+- Results can be anywhere in India; each match shows its area and town or city, so residents can tell apart places with the same name. Typing the city along with the place ("Jagadamba Junction, Visakhapatnam") narrows the results.
 
 ### Classifier (`app/classify.py`)
 
@@ -205,32 +201,36 @@ A new report joins the nearest open cluster of the same barrier type within 50 m
 
 Everything is stored in one SQLite file, `data/pi4c.db` by default. Tables are created on startup.
 
+On first start the app also generates the secret behind `reporter_hash` and keeps it in the `app_secrets` table, so there is nothing to configure. Keep it with the database when backing up or moving it; if it's lost, residents' new reports no longer link to their old ones.
+
 Photos are stored in the database (`media_files`), written with the report when the resident confirms. During the conversation they sit in `data/media/`, since the session state can't hold file bytes. That folder is deleted when the conversation ends (submitted, cancelled or restarted), and at most once an hour the bot also removes folders left by abandoned conversations. The API serves photos from the database.
 
 ### API (`app/api/`)
 
-All endpoints are under `/api/v1` and need an `X-API-Key` header.
+All endpoints are under `/api/v1`. **Read endpoints are open to anyone, no key needed.** Write endpoints (changing reports, the conversation log) need an `X-API-Key` header with a `write` key.
 
-| Endpoint | Scope | Description |
+> **Testing only.** While this is a prototype, every report is public: exact locations, disability information, free-text descriptions and photos. Put the read endpoints back behind keys before real residents use the bot.
+
+| Endpoint | Access | Description |
 |---|---|---|
-| `GET /reports` | read | Filters: category, subcategory, barrier_type, ward, department_id, severity, status, pwd_marker, needs_review, cluster_id, created_from/to, updated_since, bbox; paginated |
-| `GET /reports/{id}` | read | Full record, including media links |
-| `PATCH /reports/{id}` | write | status, status_note, department_id, severity, municipal_subject, needs_review |
-| `GET /reports/{id}/media/{media_id}` | read | Photo (from the database) |
-| `GET /reports/{id}/log` | write | Stage-wise interaction log |
-| `GET /reports.geojson` | read | Same filters, as GeoJSON points |
-| `GET /reports.csv` | read | Same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
-| `GET /clusters`, `/clusters/{id}` | read | Distinct problems with report counts |
-| `GET /stats/summary` | read | Headline numbers: total, open, resolved, PwD, needs review, high/critical, with photo |
-| `GET /stats/counts?group_by=…` | read | Counts grouped by any of category, status, severity, ward, department_id, pwd_marker… (repeat `group_by`) |
-| `GET /stats/timeseries?interval=day\|week\|month` | read | Reports per period (UTC), optional `group_by` split |
-| `GET /stats/by-ward`, `/by-category`, `/by-department` | read | Grouped counts |
-| `GET /metrics` | read | Completion rate, read-back confirm/edit, review load, classifier mix |
-| `GET /taxonomy`, `/departments`, `/wards` | read | Reference data |
+| `GET /reports` | public | Filters: category, subcategory, barrier_type, ward, department_id, severity, status, pwd_marker, needs_review, cluster_id, created_from/to, updated_since, bbox; paginated |
+| `GET /reports/{id}` | public | Full record, including media links |
+| `PATCH /reports/{id}` | write key | status, status_note, department_id, severity, municipal_subject, needs_review |
+| `GET /reports/{id}/media/{media_id}` | public | Photo (from the database) |
+| `GET /reports/{id}/log` | write key | Stage-wise interaction log |
+| `GET /reports.geojson` | public | Same filters, as GeoJSON points |
+| `GET /reports.csv` | public | Same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
+| `GET /clusters`, `/clusters/{id}` | public | Distinct problems with report counts |
+| `GET /stats/summary` | public | Headline numbers: total, open, resolved, PwD, needs review, high/critical, with photo |
+| `GET /stats/counts?group_by=…` | public | Counts grouped by any of category, status, severity, ward, department_id, pwd_marker… (repeat `group_by`) |
+| `GET /stats/timeseries?interval=day\|week\|month` | public | Reports per period (UTC), optional `group_by` split |
+| `GET /stats/by-ward`, `/by-category`, `/by-department` | public | Grouped counts |
+| `GET /metrics` | public | Completion rate, read-back confirm/edit, review load, classifier mix |
+| `GET /taxonomy`, `/departments`, `/wards` | public | Reference data |
 
 All `/stats/*` endpoints and `/reports.csv` take the same filters as `/reports`.
 
-**External dashboards.** Give each dashboard its own read key in `API_KEYS` (`grafana:read:<key>`) so it can be revoked on its own. Server-side tools (Power BI web connector, Grafana Infinity, Metabase, scripts) just send the `X-API-Key` header. A web dashboard calling the API from the browser on another site also needs its address in `CORS_ORIGINS`; note that a key in browser code is visible to anyone using that page.
+**External dashboards.** Server-side tools (Power BI web connector, Grafana Infinity, Metabase, scripts) can call the read endpoints directly, with no key. Web pages on any site can call it from the browser too: CORS allows every origin. Never put a write key in a web page's code, where anyone can read it.
 
 ---
 
@@ -256,11 +256,3 @@ Check which bot the token belongs to:
 ```bash
 uv run python -m app.telegram_cli whoami
 ```
-
----
-
-## Not yet done
-
-- No status notifications back to residents.
-- Telugu strings need native-speaker and OPD review.
-- No municipal grievance-system connector; downstream systems pull from the API.

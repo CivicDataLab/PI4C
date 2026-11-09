@@ -275,7 +275,7 @@ class Conversation:
             pwd_marker=affected in ("self", "caregiver") or d["category"] == "accessibility",
             readback_outcome="edited" if d.get("edit_count") else "confirmed",
             edit_count=d.get("edit_count", 0),
-            reporter_hash=audit.reporter_hash(s.user_id),
+            reporter_hash=audit.reporter_hash(self.db, s.user_id),
             status="new",
         )
         report.media = [_media_row(m) for m in d.get("media", [])]
