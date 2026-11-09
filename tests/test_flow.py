@@ -319,3 +319,81 @@ def test_language_is_remembered_and_changeable(client):
     assert body(last()) == M.WELCOME
     send(client, F.text(wa, "/start"))  # /start always offers the choice
     assert last()["options"][0]["id"] == "lang:te"
+
+
+# --- temporary photo files ------------------------------------------------------------------
+
+
+def _fake_downloads(monkeypatch):
+    """Make photo downloads write a real file (dry run normally skips them)."""
+    from app import main
+
+    def download(media_id, dest_dir):
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        path = dest_dir / f"{media_id}.jpg"
+        path.write_bytes(b"jpeg-bytes")
+        return path
+
+    monkeypatch.setattr(main.telegram, "download_media", download)
+
+
+def _media_folders():
+    from app.config import get_settings
+
+    media_dir = get_settings().media_dir
+    return sorted(p.name for p in media_dir.iterdir()) if media_dir.is_dir() else []
+
+
+def _walk_to_photo(client, chat_id):
+    start(client, chat_id)
+    send(client, F.reply(chat_id, "cat:accessibility"))
+    send(client, F.location(chat_id, 12.5, 80.5))
+    send(client, F.reply(chat_id, "sub:ramp"))
+    send(client, F.text(chat_id, "ramp is broken"))
+
+
+def test_photo_file_deleted_after_submit_but_kept_in_database(client, monkeypatch):
+    _fake_downloads(monkeypatch)
+    wa = "911000000040"
+    _walk_to_photo(client, wa)
+    send(client, F.image(wa, file_id="photo-40"))
+    assert len(_media_folders()) == 1  # held on disk while the conversation is open
+    send(client, F.reply(wa, "aff:self"))
+    send(client, F.reply(wa, "rb:confirm"))
+
+    assert _media_folders() == []
+    report = report_from_ack(client)
+    media = report["media"][0]
+    r = client.get(f"/api/v1/reports/{report['id']}/media/{media['id']}", headers={"X-API-Key": "read-key"})
+    assert r.status_code == 200 and r.content == b"jpeg-bytes"
+
+
+def test_photo_file_deleted_on_cancel(client, monkeypatch):
+    _fake_downloads(monkeypatch)
+    wa = "911000000041"
+    _walk_to_photo(client, wa)
+    send(client, F.image(wa, file_id="photo-41"))
+    assert len(_media_folders()) == 1
+    send(client, F.text(wa, "/cancel"))
+    assert _media_folders() == []
+
+
+def test_sweep_removes_only_abandoned_folders(client, monkeypatch):
+    from app.config import get_settings
+    from app.db import SessionLocal
+    from app.flow import sweep_media
+    from app.models import ChatSession
+
+    _fake_downloads(monkeypatch)
+    wa = "911000000042"
+    _walk_to_photo(client, wa)
+    send(client, F.image(wa, file_id="photo-42"))  # open conversation: must survive
+    abandoned = get_settings().media_dir / "abandoned-conversation"
+    abandoned.mkdir(parents=True)
+    (abandoned / "old.jpg").write_bytes(b"x")
+
+    with SessionLocal() as db:
+        open_id = db.query(ChatSession).filter_by(user_id=f"tg:{wa}").one().interaction_id
+        assert sweep_media(db, get_settings()) == 1
+    assert _media_folders() == [open_id]
+    send(client, F.text(wa, "/cancel"))

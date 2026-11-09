@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-# Every outbound message, normalised, when DRY_RUN is on (simulator and tests read this):
+# Every outbound message, normalised, when DRY_RUN is on (tests read this):
 # {"channel", "to", "kind": text|buttons|list|location_request, "body",
 #  "options": [{"id", "title", "description"}], "payload": <raw API payload>}
 OUTBOX: list[dict] = []

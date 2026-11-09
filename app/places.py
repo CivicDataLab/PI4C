@@ -1,8 +1,7 @@
 """Place search for residents who type a place name instead of sharing a location.
 
-LocationIQ when LOCATIONIQ_API_KEY is set, otherwise the public OpenStreetMap Nominatim server
-(free, no key; its policy allows one search per typed name, but not search-as-you-type, and at
-most one request per second). Both speak the same Nominatim API. Results are limited to
+Uses the public OpenStreetMap Nominatim server (free, no key; its policy allows one search per
+typed name, but not search-as-you-type, and at most one request per second). Results are limited to
 PLACE_SEARCH_BBOX (Visakhapatnam by default); anything outside it is dropped.
 """
 
@@ -17,7 +16,6 @@ from app.config import Settings
 
 log = logging.getLogger(__name__)
 
-LOCATIONIQ_URL = "https://us1.locationiq.com/v1/search"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = "PI4C-grievance-bot/0.1 (+https://github.com/JatinChauhan008/PI4C)"
 MAX_RESULTS = 5
@@ -53,15 +51,11 @@ def search(query: str, settings: Settings, language: str = "en") -> list[Place] 
         "addressdetails": 1,
         "accept-language": language,
     }
-    if settings.locationiq_api_key:
-        url, params["key"] = LOCATIONIQ_URL, settings.locationiq_api_key
-    else:
-        url = NOMINATIM_URL
-        _wait_for_nominatim()
+    _wait_for_nominatim()
     try:
-        r = httpx.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=settings.place_search_timeout_s)
-        if r.status_code == 404:  # LocationIQ answers "no match" with 404
-            return []
+        r = httpx.get(
+            NOMINATIM_URL, params=params, headers={"User-Agent": USER_AGENT}, timeout=settings.place_search_timeout_s
+        )
         r.raise_for_status()
         items = r.json()
     except Exception:

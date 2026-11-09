@@ -16,7 +16,6 @@ The flow is channel-neutral (`app/messenger.py`); Telegram is the only adapter.
 ```bash
 uv sync
 uv run pytest
-uv run python -m simulator.chat      # chat with the bot in the terminal, no token needed
 ```
 
 ## Running the Telegram bot
@@ -53,8 +52,9 @@ in `.env`. Tables are created on startup.
 
 Photos are stored in the database too (`media_files`), written
 with the report when the resident confirms. During the conversation they sit in `data/media/`,
-since the session state can't hold file bytes; that copy is left in place. The API serves files
-from the database.
+since the session state can't hold file bytes. That folder is deleted when the conversation ends
+(submitted, cancelled or restarted), and at most once an hour the bot also removes folders left by
+conversations that were abandoned (no open session for them). The API serves files from the database.
 
 ## Classifier (keyword rules)
 
@@ -124,8 +124,7 @@ especially), type a landmark, shop, road or area. `app/places.py` searches it an
 the matches as a numbered list; the pick is stored with `location_route = place_search`, and the
 read-back says the place name instead of coordinates.
 
-- With `LOCATIONIQ_API_KEY` set, searches go to [LocationIQ](https://locationiq.com) (free plan, no card).
-- Without it, the public OpenStreetMap Nominatim server is used: free and keyless, limited to one
+- Searches go to the public OpenStreetMap Nominatim server: free and keyless, limited to one
   search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
 - Results are kept inside `PLACE_SEARCH_BBOX` (`lon_min,lat_min,lon_max,lat_max`), Visakhapatnam's GVMC
   area by default, so a name like "Ameerpet" (Hyderabad) finds nothing. Shared locations are not limited.
@@ -146,7 +145,7 @@ app/
   dispatch.py      dedupe + per-resident lock + run flow
   flow.py          conversation state machine (channel-neutral)
   messenger.py     Incoming type + Messenger interface
-  places.py        typed place-name search (LocationIQ / Nominatim), limited to the city
+  places.py        typed place-name search (Nominatim), limited to the city
   telegram.py      Telegram adapter
   messages_te.py   Telugu strings (messages_en.py: English)
   classify.py      keyword-rules triage
@@ -154,7 +153,6 @@ app/
   geo.py           ward lookup, distances
   api/             REST endpoints
   models.py        SQLAlchemy tables
-simulator/chat.py  terminal simulator
 tests/
 ```
 

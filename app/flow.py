@@ -11,6 +11,7 @@ offered as a numbered list in LOCATION_PICK, so nobody has to use GPS or drag a 
 """
 
 import logging
+import shutil
 import uuid
 from dataclasses import asdict
 from datetime import timedelta
@@ -238,6 +239,7 @@ class Conversation:
         self._goto(s, State.READBACK if s.data.get("editing") else default)
 
     def _restart(self, s: ChatSession, state: State) -> None:
+        self._discard_media_dir(s)
         s.interaction_id = str(uuid.uuid4())
         s.state = state
         s.data = {}
@@ -246,6 +248,7 @@ class Conversation:
     def _cancel(self, s: ChatSession) -> None:
         audit.log_event(self.db, s.interaction_id, "cancelled", payload={"at": s.state})
         self._send_text(s, self.M.CANCELLED)
+        self._discard_media_dir(s)
         s.state = State.DONE
         s.data = {}
 
@@ -284,6 +287,7 @@ class Conversation:
         s.state = State.DONE
         s.data = {}
         self.db.commit()
+        self._discard_media_dir(s)  # the photos are in the database now
 
         # Acknowledge first; classification and clustering must never block the resident
         pipeline.process_report(self.db, report, self.settings)
@@ -407,7 +411,15 @@ class Conversation:
         return sum(1 for m in s.data.get("media", []) if m["kind"] == "image")
 
     def _replace_media(self, s: ChatSession, kind: str) -> None:
-        self._set(s, media=[m for m in s.data.get("media", []) if m["kind"] != kind])
+        media = s.data.get("media", [])
+        for m in media:
+            if m["kind"] == kind and m.get("path"):
+                Path(m["path"]).unlink(missing_ok=True)
+        self._set(s, media=[m for m in media if m["kind"] != kind])
+
+    def _discard_media_dir(self, s: ChatSession) -> None:
+        """Delete this conversation's downloaded files once it ends (submitted, cancelled, restarted)."""
+        shutil.rmtree(self.settings.media_dir / s.interaction_id, ignore_errors=True)
 
     def _store_media(self, s: ChatSession, msg: Incoming, kind: str) -> None:
         path = None
@@ -427,11 +439,35 @@ class Conversation:
 
 def _media_row(item: dict) -> Media:
     """Media record for a submitted report, with the downloaded file's bytes stored in the database.
-    Files sit in media_dir only while the conversation is open (they can't go in the session JSON)."""
+    Files sit in media_dir only while the conversation is open (they can't go in the session JSON);
+    they are deleted when it ends, and sweep_media removes any left by abandoned conversations."""
     media = Media(**item)
     if item.get("path") and Path(item["path"]).is_file():
         media.file = MediaFile.from_bytes(Path(item["path"]).read_bytes())
     return media
+
+
+def sweep_media(db: Session, settings: Settings) -> int:
+    """Delete media_dir folders whose conversation is no longer open: residents who walked away
+    and never wrote again, or files left over from before cleanup existed. Returns folders removed."""
+    if not settings.media_dir.is_dir():
+        return 0
+    cutoff = utcnow() - timedelta(minutes=settings.session_timeout_min)
+    open_ids = set(
+        db.scalars(
+            select(ChatSession.interaction_id).where(
+                ChatSession.state.not_in([State.START, State.DONE]), ChatSession.updated_at > cutoff
+            )
+        )
+    )
+    removed = 0
+    for folder in settings.media_dir.iterdir():
+        if folder.is_dir() and folder.name not in open_ids:
+            shutil.rmtree(folder, ignore_errors=True)
+            removed += 1
+    if removed:
+        log.info("removed %d leftover media folder(s)", removed)
+    return removed
 
 
 def _summarise(msg: Incoming) -> dict:

@@ -46,8 +46,8 @@ def test_photo_is_stored_in_and_served_from_the_database(client, monkeypatch):
         assert row.file.data == PHOTO and row.file.size_bytes == len(PHOTO)
         disk_copy = row.path
 
-    # Served from the database even once the disk copy is gone
-    Path(disk_copy).unlink()
+    # The temporary disk copy is deleted on submit; the photo is served from the database
+    assert not Path(disk_copy).exists()
     r = client.get(media["url"], headers=READ)
     assert r.status_code == 200 and r.content == PHOTO
     assert r.headers["content-type"] == "image/jpeg" and r.headers["etag"]

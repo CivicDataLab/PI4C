@@ -1,4 +1,4 @@
-"""Build Telegram Bot API updates for the simulator and tests."""
+"""Build Telegram Bot API updates for the tests."""
 
 import itertools
 import time
