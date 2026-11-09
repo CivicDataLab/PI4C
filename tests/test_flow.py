@@ -364,7 +364,7 @@ def test_photo_file_deleted_after_submit_but_kept_in_database(client, monkeypatc
     assert _media_folders() == []
     report = report_from_ack(client)
     media = report["media"][0]
-    r = client.get(f"/api/v1/reports/{report['id']}/media/{media['id']}", headers={"X-API-Key": "read-key"})
+    r = client.get(f"/api/v1/reports/{report['id']}/media/{media['id']}")
     assert r.status_code == 200 and r.content == b"jpeg-bytes"
 
 

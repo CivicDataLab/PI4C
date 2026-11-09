@@ -5,7 +5,6 @@ from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
 from app.api.filters import report_filters
-from app.auth import require_scope
 from app.db import get_db
 from app.models import InteractionLog, Media, Report
 
@@ -28,17 +27,17 @@ def _grouped(db: Session, columns: list, conds: list) -> list[dict]:
 
 
 @router.get("/stats/by-ward")
-def stats_by_ward(conds: list = Depends(report_filters), db: Session = Depends(get_db), _=Depends(require_scope("read"))):
+def stats_by_ward(conds: list = Depends(report_filters), db: Session = Depends(get_db)):
     return _grouped(db, [Report.ward, Report.category, Report.pwd_marker], conds)
 
 
 @router.get("/stats/by-category")
-def stats_by_category(conds: list = Depends(report_filters), db: Session = Depends(get_db), _=Depends(require_scope("read"))):
+def stats_by_category(conds: list = Depends(report_filters), db: Session = Depends(get_db)):
     return _grouped(db, [Report.category, Report.barrier_type, Report.pwd_marker], conds)
 
 
 @router.get("/stats/by-department")
-def stats_by_department(conds: list = Depends(report_filters), db: Session = Depends(get_db), _=Depends(require_scope("read"))):
+def stats_by_department(conds: list = Depends(report_filters), db: Session = Depends(get_db)):
     return _grouped(db, [Report.department_id, Report.status], conds)
 
 
@@ -50,7 +49,7 @@ def _group_columns(group_by: list[str]) -> list:
 
 
 @router.get("/stats/summary")
-def stats_summary(conds: list = Depends(report_filters), db: Session = Depends(get_db), _=Depends(require_scope("read"))):
+def stats_summary(conds: list = Depends(report_filters), db: Session = Depends(get_db)):
     """Headline numbers for a dashboard's top row; takes the same filters as /reports."""
 
     def count(*extra) -> int:
@@ -77,7 +76,6 @@ def stats_counts(
     group_by: list[str] = Query(..., description=f"One or more of: {', '.join(GROUPABLE)}"),
     conds: list = Depends(report_filters),
     db: Session = Depends(get_db),
-    _=Depends(require_scope("read")),
 ):
     """Report counts grouped by any combination of fields, e.g. ?group_by=status&group_by=severity."""
     return _grouped(db, _group_columns(group_by), conds)
@@ -99,14 +97,13 @@ def stats_timeseries(
     group_by: list[str] = Query([], description="Optional split per period, e.g. category"),
     conds: list = Depends(report_filters),
     db: Session = Depends(get_db),
-    _=Depends(require_scope("read")),
 ):
     """Reports per day / week / month (UTC) for trend charts. Periods with no reports are omitted."""
     return _grouped(db, [_period(interval).label("period"), *_group_columns(group_by)], conds)
 
 
 @router.get("/metrics")
-def metrics(db: Session = Depends(get_db), _=Depends(require_scope("read"))):
+def metrics(db: Session = Depends(get_db)):
     """Evaluation signals from the work plan: completion, read-back fidelity, review load."""
 
     def count_by(column) -> dict:

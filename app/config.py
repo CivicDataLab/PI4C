@@ -21,8 +21,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
-    # Read API: "name:scope:key,..."
-    api_keys: str = ""
+    # API: reading is open to everyone. true = anyone can also write (change reports, see the
+    # conversation log); false = nobody can.
+    write_access: bool = False
 
     session_timeout_min: int = 30
 

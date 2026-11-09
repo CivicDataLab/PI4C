@@ -46,7 +46,7 @@ The conversation flow is channel-neutral (`app/messenger.py`); Telegram is the o
 | `app/messages_te.py` | File | Every Telugu string the bot sends, with English glosses, for review with OPDs |
 | `app/messages_en.py` | File | English strings (same names as the Telugu file) |
 | `app/audit.py` | File | Stage-wise interaction log and the HMAC `reporter_hash` |
-| `app/auth.py` | File | `X-API-Key` checking with read / write scopes |
+| `app/auth.py` | File | The `WRITE_ACCESS` switch for endpoints that change data |
 | `app/models.py` | File | SQLAlchemy tables |
 | `app/schemas.py` | File | API request/response models, the contract downstream consumers build against |
 | `app/db.py` | File | SQLite engine and table creation |
@@ -115,7 +115,7 @@ Then edit `.env`. It is gitignored; keep real tokens and keys out of `.env.examp
 | Variable | Required | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather |
-| `API_KEYS` | Yes | Comma-separated `name:scope:key` entries; scope is `read` or `write` (write can also read). Only needed for changing reports and the conversation log, since read endpoints are public |
+| `WRITE_ACCESS` | No | `true` lets anyone change reports and see conversation logs; `false` (the default) blocks that for everyone. Reading is always open |
 | `TELEGRAM_WEBHOOK_SECRET` | When deployed | Random string Telegram sends with every webhook call. Without it, anyone who finds the webhook URL can submit fake reports |
 | `DATABASE_URL` | No | Another SQLite file, as `sqlite:///...`. Defaults to `data/pi4c.db` |
 
@@ -171,15 +171,15 @@ Polling and a webhook can't run at the same time; `poll` deletes the webhook whe
 
 ### API (`app/api/`)
 
-All endpoints are under `/api/v1`. **Read endpoints are open to anyone, no key needed.** Write endpoints (changing reports, the conversation log) need an `X-API-Key` header with a `write` key.
+All endpoints are under `/api/v1` and need no key. **Read endpoints are open to anyone.** Write endpoints (changing reports, the conversation log) follow `WRITE_ACCESS`: open to anyone when it's `true`, closed to everyone when it's `false`.
 
 | Endpoint | Access | Description |
 |---|---|---|
 | `GET /reports` | public | Filters: category, subcategory, barrier_type, ward, department_id, severity, status, pwd_marker, needs_review, cluster_id, created_from/to, updated_since, bbox; paginated |
 | `GET /reports/{id}` | public | Full record, including media links |
-| `PATCH /reports/{id}` | write key | status, status_note, department_id, severity, municipal_subject, needs_review |
+| `PATCH /reports/{id}` | write access | status, status_note, department_id, severity, municipal_subject, needs_review |
 | `GET /reports/{id}/media/{media_id}` | public | Photo (from the database) |
-| `GET /reports/{id}/log` | write key | Stage-wise interaction log |
+| `GET /reports/{id}/log` | write access | Stage-wise interaction log |
 | `GET /reports.geojson` | public | Same filters, as GeoJSON points |
 | `GET /reports.csv` | public | Same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
 | `GET /clusters`, `/clusters/{id}` | public | Distinct problems with report counts |
@@ -192,7 +192,7 @@ All endpoints are under `/api/v1`. **Read endpoints are open to anyone, no key n
 
 All `/stats/*` endpoints and `/reports.csv` take the same filters as `/reports`.
 
-**External dashboards.** Server-side tools (Power BI web connector, Grafana Infinity, Metabase, scripts) can call the read endpoints directly, with no key. Web pages on any site can call it from the browser too: CORS allows every origin. Never put a write key in a web page's code, where anyone can read it.
+**External dashboards.** Server-side tools (Power BI web connector, Grafana Infinity, Metabase, scripts) can call the read endpoints directly, with no key. Web pages on any site can call it from the browser too: CORS allows every origin.
 
 ---
 

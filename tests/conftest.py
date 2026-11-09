@@ -10,7 +10,7 @@ os.environ.update(
         "DRY_RUN": "true",
         "TELEGRAM_BOT_TOKEN": "",
         "TELEGRAM_WEBHOOK_SECRET": "",
-        "API_KEYS": "reader:read:read-key,writer:write:write-key",
+        "WRITE_ACCESS": "true",
     }
 )
 
@@ -21,8 +21,6 @@ from app import fake_inbound as F  # noqa: E402
 from app.main import app  # noqa: E402
 from app.messenger import OUTBOX  # noqa: E402
 
-READ = {"X-API-Key": "read-key"}
-WRITE = {"X-API-Key": "write-key"}
 
 
 @pytest.fixture(scope="session")
@@ -55,7 +53,7 @@ def body(msg: dict) -> str:
 
 def report_from_ack(client) -> dict:
     ref = next(body(m) for m in reversed(OUTBOX) if "PI4C-" in body(m)).split("PI4C-")[1][:6]
-    r = client.get(f"/api/v1/reports/{int(ref)}", headers=READ)
+    r = client.get(f"/api/v1/reports/{int(ref)}")
     assert r.status_code == 200
     return r.json()
 

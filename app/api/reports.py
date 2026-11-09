@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import audit, taxonomy
 from app.api.filters import report_filters
-from app.auth import require_scope
+from app.auth import require_write_access
 from app.db import get_db
 from app.models import InteractionLog, Media, Report
 from app.schemas import LogEntry, Page, ReportOut, ReportPatch
@@ -30,7 +30,6 @@ def list_reports(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _: str = Depends(require_scope("read")),
 ):
     total = db.scalar(select(func.count()).select_from(Report).where(*conds))
     rows = db.scalars(
@@ -49,7 +48,6 @@ def reports_geojson(
     conds: list = Depends(report_filters),
     limit: int = Query(1000, ge=1, le=5000),
     db: Session = Depends(get_db),
-    _: str = Depends(require_scope("read")),
 ):
     rows = db.scalars(select(Report).where(*conds).order_by(Report.id.desc()).limit(limit)).all()
     return {
@@ -84,7 +82,6 @@ CSV_FIELDS = [name for name in ReportOut.model_fields if name != "media"] + ["ph
 def reports_csv(
     conds: list = Depends(report_filters),
     db: Session = Depends(get_db),
-    _: str = Depends(require_scope("read")),
 ):
     """Every matching report as CSV (UTF-8 with BOM so Excel shows Telugu correctly), for Excel / Power BI."""
     stmt = select(Report).where(*conds).options(selectinload(Report.media)).order_by(Report.id)
@@ -111,7 +108,7 @@ def reports_csv(
 
 
 @router.get("/reports/{report_id}", response_model=ReportOut)
-def get_report(report_id: int, db: Session = Depends(get_db), _: str = Depends(require_scope("read"))):
+def get_report(report_id: int, db: Session = Depends(get_db)):
     return _get_report(db, report_id)
 
 
@@ -120,7 +117,7 @@ def update_report(
     report_id: int,
     patch: ReportPatch,
     db: Session = Depends(get_db),
-    client: str = Depends(require_scope("write")),
+    _: None = Depends(require_write_access),
 ):
     report = _get_report(db, report_id)
     changes = patch.model_dump(exclude_unset=True)
@@ -128,14 +125,14 @@ def update_report(
         raise HTTPException(422, f"Unknown department_id '{changes['department_id']}'")
     for field, value in changes.items():
         setattr(report, field, value)
-    audit.log_event(db, report.interaction_id, "api_update", payload={"client": client, "changes": changes}, report_id=report.id)
+    audit.log_event(db, report.interaction_id, "api_update", payload={"changes": changes}, report_id=report.id)
     db.commit()
     return _get_report(db, report_id)
 
 
 @router.get("/reports/{report_id}/media/{media_id}")
 def get_media(
-    report_id: int, media_id: int, db: Session = Depends(get_db), _: str = Depends(require_scope("read"))
+    report_id: int, media_id: int, db: Session = Depends(get_db)
 ):
     media = db.get(Media, media_id)
     if media is None or media.report_id != report_id:
@@ -150,7 +147,7 @@ def get_media(
 
 
 @router.get("/reports/{report_id}/log", response_model=list[LogEntry])
-def get_report_log(report_id: int, db: Session = Depends(get_db), _: str = Depends(require_scope("write"))):
+def get_report_log(report_id: int, db: Session = Depends(get_db), _: None = Depends(require_write_access)):
     """Stage-wise interaction log for the conversation that produced this report (internal use)."""
     report = _get_report(db, report_id)
     return db.scalars(

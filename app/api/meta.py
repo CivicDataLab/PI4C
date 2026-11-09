@@ -1,21 +1,20 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
 from app import geo, taxonomy
-from app.auth import require_scope
 
 router = APIRouter(tags=["reference"])
 
 
 @router.get("/taxonomy")
-def get_taxonomy(_=Depends(require_scope("read"))):
+def get_taxonomy():
     return {"categories": taxonomy.categories()}
 
 
 @router.get("/departments")
-def get_departments(_=Depends(require_scope("read"))):
+def get_departments():
     return {"departments": taxonomy.departments()}
 
 
 @router.get("/wards")
-def get_wards(_=Depends(require_scope("read"))):
+def get_wards():
     return geo.load_wards()

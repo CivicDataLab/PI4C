@@ -33,13 +33,13 @@ app = FastAPI(
 )
 for module in (reports, clusters, stats, meta):
     app.include_router(module.router, prefix="/api/v1")
-# Any website may call the API from the browser. Safe because read endpoints are public anyway and
-# keys travel in the X-API-Key header, not cookies (no credentials mode), so a site can't borrow a login.
+# Any website may call the API from the browser. Reading is public anyway, and writing is either
+# open to everyone or off for everyone (WRITE_ACCESS), so there is no login for a site to borrow.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["GET", "PATCH"],
-    allow_headers=["X-API-Key", "Content-Type"],
+    allow_headers=["Content-Type"],
     expose_headers=["Content-Disposition", "ETag"],
 )
 
