@@ -1,81 +1,170 @@
-# PI4C — accessible grievance chatbot (Telegram, Telugu)
+# PI4C
 
-Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram
-bot in Telugu or English. Each report is structured (category, location, photo, disability context), read back
-for confirmation, triaged by keyword rules (barrier type, department, severity), grouped with
-repeat reports of the same problem, and exposed through a REST API for downstream systems.
+An accessible grievance chatbot for Visakhapatnam. Residents report accessibility barriers, civic problems and disaster/climate impacts to a Telegram bot in Telugu or English, and every report is structured, triaged, grouped with repeat reports of the same problem, and made available through a REST API for downstream systems.
+
+> Chat IDs never leave the bot: reports carry an HMAC `reporter_hash` instead, and every stage of every conversation is logged so you can see exactly how a report was built.
+
+---
+
+## Why this exists
+
+Reporting a broken ramp, an open manhole or a flooded street usually means finding the right office, filling in a form in English and describing the location precisely. For people with disabilities, caregivers and residents who are more comfortable in Telugu, that is often where the report ends.
+
+This project removes that barrier by meeting residents in a messaging app they already use. The bot asks one simple question at a time, accepts taps or typed numbers instead of requiring precise touch input, lets residents type a landmark instead of dragging a map pin, and reads the whole report back for confirmation before submitting it. On the other side, municipal teams and dashboards get clean, structured data through an API instead of free-text complaints.
+
+---
+
+## How it works
 
 ```
 Telegram ─► poll / webhook ─► dispatch ─► flow.py (state machine) ─► Report ─► classify (rules) ─► cluster ─► /api/v1/*
 ```
 
-The flow is channel-neutral (`app/messenger.py`); Telegram is the only adapter.
+1. A resident messages the bot on Telegram.
+2. `telegram.py` receives the update (long polling in development, a webhook when deployed) and `dispatch.py` hands it on, ignoring duplicate deliveries and handling one message per resident at a time.
+3. `flow.py` walks the resident through the report: language, category, location, sub-category, description, photo, who is affected, then a read-back to confirm or edit.
+4. On confirmation the report is saved to SQLite, with any photos stored in the database.
+5. `classify.py` triages it with keyword rules (barrier type, department, severity) and `cluster.py` groups it with nearby open reports of the same problem.
+6. Downstream systems and dashboards read reports, clusters and statistics from the REST API.
+
+The conversation flow is channel-neutral (`app/messenger.py`); Telegram is the only adapter today.
+
+---
+
+## Repository structure
+
+| Path | Type | Description |
+|---|---|---|
+| `app/main.py` | File | FastAPI app: the read API and the Telegram webhook endpoint |
+| `app/telegram_cli.py` | File | Bot commands: `poll`, `set-webhook`, `delete-webhook`, `whoami`, `set-profile` |
+| `app/telegram.py` | File | Telegram Bot API adapter: parse updates, send messages, download photos |
+| `app/messenger.py` | File | Channel-neutral `Incoming` message type and `Messenger` interface |
+| `app/dispatch.py` | File | Duplicate filtering, per-resident locking, hourly cleanup of abandoned photo folders |
+| `app/flow.py` | File | Conversation state machine, from language choice to submitted report |
+| `app/places.py` | File | Typed place-name search (OpenStreetMap Nominatim), limited to the city |
+| `app/pipeline.py` | File | Post-submission processing: classify, then cluster |
+| `app/classify.py` | File | Keyword-rules triage: barrier type, department, severity |
+| `app/cluster.py` | File | Groups repeat reports of the same physical problem |
+| `app/geo.py` | File | Ward lookup and distances |
+| `app/taxonomy.py` | File | Loads categories, sub-categories and departments from `data/` |
+| `app/i18n.py` | File | Language registry |
+| `app/messages_te.py` | File | Every Telugu string the bot sends, with English glosses, for review with OPDs |
+| `app/messages_en.py` | File | English strings (same names as the Telugu file) |
+| `app/audit.py` | File | Stage-wise interaction log and the HMAC `reporter_hash` |
+| `app/auth.py` | File | `X-API-Key` checking with read / write scopes |
+| `app/models.py` | File | SQLAlchemy tables |
+| `app/schemas.py` | File | API request/response models, the contract downstream consumers build against |
+| `app/db.py` | File | SQLite engine and table creation |
+| `app/config.py` | File | Settings and `.env` loader |
+| `app/fake_inbound.py` | File | Builds fake Telegram updates for the tests |
+| `app/api/` | Directory | REST endpoints: reports, clusters, stats, reference data |
+| `data/taxonomy.json` | File | Categories and sub-categories (Telugu labels, default department, municipal subject) |
+| `data/departments.json` | File | **Placeholder** department list |
+| `data/wards.geojson` | File | Optional ward polygons; empty for now, so reports have no ward |
+| `docs/schema.md` | File | Database schema reference |
+| `tests/` | Directory | API, conversation flow, dashboard and unit tests |
+| `pyproject.toml` | File | Project metadata and Python dependencies (managed with `uv`) |
+| `uv.lock` | File | Locked dependency versions, generated by `uv` |
+| `.env` | File | Local secrets (gitignored, copied from `.env.example`) |
+| `.env.example` | File | Variable names with placeholder values |
+
+---
 
 ## Quick start
 
+### Prerequisites
+
+- [uv](https://docs.astral.sh/uv/): no separate Python install needed; `uv` downloads Python 3.12 or newer automatically if it isn't on your machine.
+
+```bash
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+- A Telegram bot token: in Telegram, message **@BotFather**, send `/newbot` and copy the token it gives you.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/JatinChauhan008/PI4C.git
+cd PI4C
+```
+
+### 2. Install dependencies
+
 ```bash
 uv sync
+```
+
+This creates `.venv/`, installs Python if needed, and installs the locked dependencies from `uv.lock`. Check that everything works with:
+
+```bash
 uv run pytest
 ```
 
-## Running the Telegram bot
+### 3. Configure environment variables
 
-1. In Telegram, message **@BotFather** → `/newbot` → copy the token into `.env` as `TELEGRAM_BOT_TOKEN`.
-2. Local development (no public URL needed):
+```bash
+# Windows
+copy .env.example .env
 
-   ```bash
-   uv run python -m app.telegram_cli poll
-   ```
+# macOS / Linux
+cp .env.example .env
+```
 
-   Open your bot in Telegram and send `/start`.
-3. The read API runs separately:
+Then edit `.env`. It is gitignored; keep real tokens and keys out of `.env.example`, the README and source files.
 
-   ```bash
-   uv run uvicorn app.main:app --reload
-   ```
+| Variable | Required | Description |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather |
+| `API_KEYS` | Yes | Comma-separated `name:scope:key` entries; scope is `read` or `write` (write can also read) |
+| `REPORTER_HASH_SECRET` | Yes | Random secret used to pseudonymise chat IDs. Set it before the first real report; changing it later breaks the link between a resident's old and new reports |
+| `TELEGRAM_WEBHOOK_SECRET` | When deployed | Random string Telegram sends with every webhook call. Without it, anyone who finds the webhook URL can submit fake reports |
+| `CORS_ORIGINS` | No | Web dashboards on other sites that call the API from the browser (comma-separated, or `*`) |
+| `PLACE_SEARCH_BBOX` | No | Box that typed place searches are limited to, as `lon_min,lat_min,lon_max,lat_max`. Defaults to Visakhapatnam's GVMC area |
+| `DATABASE_URL` | No | Another SQLite file, as `sqlite:///...`. Defaults to `data/pi4c.db` |
+| `DRY_RUN` | No | `true` captures outbound messages instead of calling Telegram (used by the tests) |
 
-   Docs at http://localhost:8000/docs; import http://localhost:8000/openapi.json into Postman.
+### 4. Run the application
 
-**Bot profile:** the description, profile "About" text and `/start` `/language` `/cancel` menu live in
-`BOT_DESCRIPTION`, `BOT_SHORT_DESCRIPTION` and `BOT_COMMANDS` in `app/messages_en.py` / `app/messages_te.py`.
-After editing them, publish with `uv run python -m app.telegram_cli set-profile` (English is the
-default; Telugu is shown to users whose Telegram app is set to Telugu).
+**Telegram bot (local development, no public URL needed):**
 
-**Webhook mode** (deployed server): set `TELEGRAM_WEBHOOK_SECRET`, run uvicorn behind HTTPS, then
-`uv run python -m app.telegram_cli set-webhook https://<host>/telegram/webhook`. Polling and a
-webhook can't run at the same time; `poll` deletes the webhook on start.
+```bash
+uv run python -m app.telegram_cli poll
+```
 
-## Database
+Open your bot in Telegram and send `/start`.
 
-SQLite only for now: `data/pi4c.db`, or another SQLite file set as `DATABASE_URL=sqlite:///...`
-in `.env`. Tables are created on startup.
+**Read API** (runs separately):
 
-Photos are stored in the database too (`media_files`), written
-with the report when the resident confirms. During the conversation they sit in `data/media/`,
-since the session state can't hold file bytes. That folder is deleted when the conversation ends
-(submitted, cancelled or restarted), and at most once an hour the bot also removes folders left by
-conversations that were abandoned (no open session for them). The API serves files from the database.
+```bash
+uv run uvicorn app.main:app --reload
+```
 
-## Classifier (keyword rules)
+Interactive docs are at http://localhost:8000/docs. Import http://localhost:8000/openapi.json into Postman to try the endpoints.
 
-`app/classify.py` triages each confirmed report without any external service:
+**Webhook mode** (deployed server): set `TELEGRAM_WEBHOOK_SECRET`, run uvicorn behind HTTPS, then register the webhook:
 
-| Field | Rule |
-|---|---|
-| `barrier_type` | the sub-category the resident picked |
-| `department_id` | the sub-category's `default_department` in `data/taxonomy.json` |
-| `severity` | `high` for urgent words (danger, open manhole, live wire...) or disaster reports, otherwise `medium` |
+```bash
+uv run python -m app.telegram_cli set-webhook https://<host>/telegram/webhook
+```
 
-A report whose default department isn't in `data/departments.json` gets `needs_review`.
-`summary_en`, `description_en`, `confidence` and `classifier_model` stay empty.
+Polling and a webhook can't run at the same time; `poll` deletes the webhook when it starts.
 
-## Conversation
+---
+
+## Components
+
+### Conversation (`app/flow.py`)
 
 | Step | Resident sees | Accepts |
 |---|---|---|
 | LANGUAGE | తెలుగు / English (first contact and every `/start`) | tap |
 | MENU | 3 buttons: Accessibility / General Civic / Disaster-Climate | tap, or type 1–3 |
-| LOCATION | **Live location**, **Choose a location** and **Type the place name** keyboard buttons | device location, live location, a place picked via the attach (paperclip) menu → Location ("Choose a location" replies with those steps), or a typed place name |
+| LOCATION | **Live location**, **Choose a location** and **Type the place name** keyboard buttons | device location, live location, a place picked via the attach (paperclip) menu → Location, or a typed place name |
 | LOCATION_PICK | up to 5 matching places in Visakhapatnam as a numbered list, plus "None of these" | tap, type the number, or type another name to search again |
 | SUBCATEGORY | numbered list + buttons | tap, or type the number |
 | DESCRIBE | free text prompt | typed text, or a photo with a caption (voice notes are refused) |
@@ -83,78 +172,92 @@ A report whose default department isn't in `data/departments.json` gets `needs_r
 | AFFECTED | self (PwD) / caregiver / general | tap |
 | READBACK | summary + Confirm / Edit / Cancel | Edit jumps to one step, then back here |
 
-`/start`, "మెనూ" or "hi" restarts; `/cancel` or "రద్దు" cancels. Sessions expire after 30 min of silence.
-Only private chats are handled; group messages are ignored.
+`/start`, "మెనూ" or "hi" restarts; `/cancel` or "రద్దు" cancels. Sessions expire after 30 minutes of silence. Only private chats are handled; group messages are ignored.
 
 `pwd_marker` is true when the reporter is a person with disability or a caregiver, or the category is accessibility.
 
-## API (all under `/api/v1`, header `X-API-Key`)
+**Bot profile:** the description, "About" text and `/start` `/language` `/cancel` menu live in `BOT_DESCRIPTION`, `BOT_SHORT_DESCRIPTION` and `BOT_COMMANDS` in `app/messages_en.py` and `app/messages_te.py`. After editing them, publish with `uv run python -m app.telegram_cli set-profile`. English is the default; Telugu is shown to users whose Telegram app is set to Telugu.
 
-| Endpoint | Scope | |
+### Place search (`app/places.py`)
+
+Residents who can't share a location, or would rather not drag a map pin (screen-reader users especially), type a landmark, shop, road or area. The bot offers the matches as a numbered list; the pick is stored with `location_route = place_search`, and the read-back says the place name instead of coordinates.
+
+- Searches go to the public OpenStreetMap Nominatim server: free and keyless, limited to one search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
+- Results are kept inside `PLACE_SEARCH_BBOX`, so a name like "Ameerpet" (Hyderabad) finds nothing. Shared locations are not limited.
+
+### Classifier (`app/classify.py`)
+
+Each confirmed report is triaged with keyword rules, without any external service:
+
+| Field | Rule |
+|---|---|
+| `barrier_type` | the sub-category the resident picked |
+| `department_id` | the sub-category's `default_department` in `data/taxonomy.json` |
+| `severity` | `high` for urgent words (danger, open manhole, live wire...) or disaster reports, otherwise `medium` |
+
+A report whose default department isn't in `data/departments.json` gets `needs_review`. `summary_en`, `description_en`, `confidence` and `classifier_model` stay empty.
+
+### Clustering (`app/cluster.py`)
+
+A new report joins the nearest open cluster of the same barrier type within 50 m seen in the last 30 days. Matches beyond 20 m are marked "possible" so a person can confirm them; everything else starts a new cluster.
+
+### Storage (`app/db.py`, `app/models.py`)
+
+Everything is stored in one SQLite file, `data/pi4c.db` by default. Tables are created on startup.
+
+Photos are stored in the database (`media_files`), written with the report when the resident confirms. During the conversation they sit in `data/media/`, since the session state can't hold file bytes. That folder is deleted when the conversation ends (submitted, cancelled or restarted), and at most once an hour the bot also removes folders left by abandoned conversations. The API serves photos from the database.
+
+### API (`app/api/`)
+
+All endpoints are under `/api/v1` and need an `X-API-Key` header.
+
+| Endpoint | Scope | Description |
 |---|---|---|
-| `GET /reports` | read | filters: category, subcategory, barrier_type, ward, department_id, severity, status, pwd_marker, needs_review, cluster_id, created_from/to, updated_since, bbox; paginated |
-| `GET /reports/{id}` | read | full record incl. media links |
+| `GET /reports` | read | Filters: category, subcategory, barrier_type, ward, department_id, severity, status, pwd_marker, needs_review, cluster_id, created_from/to, updated_since, bbox; paginated |
+| `GET /reports/{id}` | read | Full record, including media links |
 | `PATCH /reports/{id}` | write | status, status_note, department_id, severity, municipal_subject, needs_review |
-| `GET /reports/{id}/media/{media_id}` | read | photo (from the database) |
-| `GET /reports/{id}/log` | write | stage-wise interaction log |
-| `GET /reports.geojson` | read | same filters, GeoJSON points |
-| `GET /reports.csv` | read | same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
-| `GET /clusters`, `/clusters/{id}` | read | distinct problems with report counts |
-| `GET /stats/summary` | read | headline numbers: total, open, resolved, PwD, needs review, high/critical, with photo |
-| `GET /stats/counts?group_by=…` | read | counts grouped by any of category, status, severity, ward, department_id, pwd_marker… (repeat `group_by`) |
-| `GET /stats/timeseries?interval=day\|week\|month` | read | reports per period (UTC), optional `group_by` split |
-| `GET /stats/by-ward`, `/by-category`, `/by-department` | read | grouped counts |
-| `GET /metrics` | read | completion rate, read-back confirm/edit, review load, classifier mix |
-| `GET /taxonomy`, `/departments`, `/wards` | read | reference data |
-
-Chat IDs are never exposed; reports carry an HMAC `reporter_hash` instead.
+| `GET /reports/{id}/media/{media_id}` | read | Photo (from the database) |
+| `GET /reports/{id}/log` | write | Stage-wise interaction log |
+| `GET /reports.geojson` | read | Same filters, as GeoJSON points |
+| `GET /reports.csv` | read | Same filters, every matching report as CSV (Excel / Power BI); UTF-8 with BOM |
+| `GET /clusters`, `/clusters/{id}` | read | Distinct problems with report counts |
+| `GET /stats/summary` | read | Headline numbers: total, open, resolved, PwD, needs review, high/critical, with photo |
+| `GET /stats/counts?group_by=…` | read | Counts grouped by any of category, status, severity, ward, department_id, pwd_marker… (repeat `group_by`) |
+| `GET /stats/timeseries?interval=day\|week\|month` | read | Reports per period (UTC), optional `group_by` split |
+| `GET /stats/by-ward`, `/by-category`, `/by-department` | read | Grouped counts |
+| `GET /metrics` | read | Completion rate, read-back confirm/edit, review load, classifier mix |
+| `GET /taxonomy`, `/departments`, `/wards` | read | Reference data |
 
 All `/stats/*` endpoints and `/reports.csv` take the same filters as `/reports`.
 
-**External dashboards.** Give each dashboard its own read key in `API_KEYS` (`grafana:read:<key>`)
-so it can be revoked alone. Server-side tools (Power BI web connector, Grafana Infinity, Metabase,
-scripts) just send the `X-API-Key` header. A web dashboard calling the API from the browser on
-another site also needs its address in `CORS_ORIGINS`; note that a key in browser code is
-visible to anyone using that page.
+**External dashboards.** Give each dashboard its own read key in `API_KEYS` (`grafana:read:<key>`) so it can be revoked on its own. Server-side tools (Power BI web connector, Grafana Infinity, Metabase, scripts) just send the `X-API-Key` header. A web dashboard calling the API from the browser on another site also needs its address in `CORS_ORIGINS`; note that a key in browser code is visible to anyone using that page.
 
-## Place search (typed place names)
-
-Residents who can't share a location, or would rather not drag a map pin (screen-reader users
-especially), type a landmark, shop, road or area. `app/places.py` searches it and the bot offers
-the matches as a numbered list; the pick is stored with `location_route = place_search`, and the
-read-back says the place name instead of coordinates.
-
-- Searches go to the public OpenStreetMap Nominatim server: free and keyless, limited to one
-  search per second, and its policy rules out search-as-you-type. Fine for testing and a small pilot.
-- Results are kept inside `PLACE_SEARCH_BBOX` (`lon_min,lat_min,lon_max,lat_max`), Visakhapatnam's GVMC
-  area by default, so a name like "Ameerpet" (Hyderabad) finds nothing. Shared locations are not limited.
+---
 
 ## Configuration you'll want to edit
 
-- `data/departments.json`: **placeholder** department list. `handles` becomes the classifier's option description.
+- `data/departments.json`: **placeholder** department list. `handles` describes what each department deals with.
 - `data/taxonomy.json`: categories and sub-categories (Telugu labels, default department, municipal subject).
-- `data/wards.geojson`: optional ward polygons; reports get `ward` set from their location.
-- `app/messages_te.py`: every Telugu string the bot sends, with English glosses, for review with OPDs.
+- `data/wards.geojson`: optional ward polygons (`properties.ward` or `properties.name`); reports get `ward` set from their location. Empty for now.
+- `app/messages_te.py`: every Telugu string the bot sends, with English glosses, for review with OPDs and native speakers.
 
-## Layout
+---
 
+## Development
+
+Run the tests:
+
+```bash
+uv run pytest
 ```
-app/
-  main.py          FastAPI: read API + Telegram webhook
-  telegram_cli.py  poll / set-webhook / delete-webhook / whoami
-  dispatch.py      dedupe + per-resident lock + run flow
-  flow.py          conversation state machine (channel-neutral)
-  messenger.py     Incoming type + Messenger interface
-  places.py        typed place-name search (Nominatim), limited to the city
-  telegram.py      Telegram adapter
-  messages_te.py   Telugu strings (messages_en.py: English)
-  classify.py      keyword-rules triage
-  cluster.py       repeat-report grouping
-  geo.py           ward lookup, distances
-  api/             REST endpoints
-  models.py        SQLAlchemy tables
-tests/
+
+Check which bot the token belongs to:
+
+```bash
+uv run python -m app.telegram_cli whoami
 ```
+
+---
 
 ## Not yet done
 
