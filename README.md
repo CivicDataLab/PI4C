@@ -84,7 +84,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/JatinChauhan008/PI4C.git
+git clone https://github.com/CivicDataLab/PI4C
 cd PI4C
 ```
 
