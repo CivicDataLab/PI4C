@@ -3,7 +3,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.filters import parse_bbox
-from app.auth import require_scope
 from app.db import get_db
 from app.models import Cluster, Report
 from app.schemas import ClusterDetail, ClusterOut, Page
@@ -21,7 +20,6 @@ def list_clusters(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _: str = Depends(require_scope("read")),
 ):
     conds = [Cluster.report_count >= min_reports]
     for col, value in ((Cluster.category, category), (Cluster.subcategory, subcategory), (Cluster.status, status)):
@@ -43,7 +41,7 @@ def list_clusters(
 
 
 @router.get("/clusters/{cluster_id}", response_model=ClusterDetail)
-def get_cluster(cluster_id: int, db: Session = Depends(get_db), _: str = Depends(require_scope("read"))):
+def get_cluster(cluster_id: int, db: Session = Depends(get_db)):
     cluster = db.get(Cluster, cluster_id)
     if cluster is None:
         raise HTTPException(404, "Cluster not found")

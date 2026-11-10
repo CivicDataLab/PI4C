@@ -13,25 +13,21 @@ class Settings(BaseSettings):
     data_dir: Path = BASE_DIR / "data"
     media_dir: Path = BASE_DIR / "data" / "media"
 
-    # Capture outbound messages instead of calling Telegram (tests)
+    # Capture outbound messages instead of calling Telegram. Set only by the tests (tests/conftest.py);
+    # deliberately not in .env.example, since a server with it on would never reply to residents.
     dry_run: bool = False
 
     # Telegram (active channel)
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
-    # Read API: "name:scope:key,..."
-    api_keys: str = ""
-    # Web dashboards on other sites allowed to call the API from the browser: "https://a.example,https://b.example"
-    # ("*" = any). Not needed for server-side tools (Power BI, Grafana, Metabase, scripts).
-    cors_origins: str = ""
-    reporter_hash_secret: str = "change-me"
+    # API: reading is open to everyone. true = anyone can also write (change reports, see the
+    # conversation log); false = nobody can.
+    write_access: bool = False
 
     session_timeout_min: int = 30
 
-    # Place search for typed place names (public OpenStreetMap Nominatim).
-    # Results are kept inside the box "lon_min,lat_min,lon_max,lat_max" (default: Visakhapatnam, GVMC area)
-    place_search_bbox: str = "82.95,17.55,83.45,17.95"
+    # Place search for typed place names (public OpenStreetMap Nominatim)
     place_search_timeout_s: float = 8.0
 
     # Clustering: join the nearest open cluster within radius; within strict radius it's a confident match

@@ -166,3 +166,13 @@ class InteractionLog(Base):
     direction: Mapped[str] = mapped_column(String(8))  # in | out | system
     payload: Mapped[dict | None] = mapped_column(JsonDoc)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AppSecret(Base):
+    """Secrets the app generates for itself on first start (see app.audit.ensure_secrets)."""
+
+    __tablename__ = "app_secrets"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

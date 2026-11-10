@@ -63,7 +63,7 @@ Complaint number shown to residents is `PI4C-` + `id` padded to 6 digits (`PI4C-
 | `edit_count` | integer | no | Number of edits before confirming |
 | `status` | varchar(16) | no | `new`, `acknowledged`, `in_progress`, `resolved`, `rejected` (indexed) |
 | `status_note` | text | yes | Free-text note set through `PATCH /reports/{id}` |
-| `reporter_hash` | varchar(64) | no | HMAC of the resident's chat ID; counts repeat reporters without storing the ID (indexed) |
+| `reporter_hash` | varchar(64) | no | HMAC of the resident's chat ID, keyed with the `app_secrets` value; counts repeat reporters without storing the ID (indexed) |
 
 ### `clusters`: one row per distinct physical problem
 
@@ -138,6 +138,17 @@ The only table that holds the raw chat ID. Sessions expire after 30 minutes of s
 |---|---|---|---|
 | `key` | varchar(160), PK | no | Telegram `update_id`, so a retried delivery is handled once |
 | `received_at` | timestamp | no | |
+
+### `app_secrets`: secrets the app generates for itself
+
+| Column | Type | Null | Meaning |
+|---|---|---|---|
+| `name` | varchar(64), PK | no | `reporter_hash`: the key for `reports.reporter_hash` |
+| `value` | varchar(128) | no | Random value created on first start; never exposed by the API |
+| `created_at` | timestamp | no | |
+
+Keep this row when backing up or moving the database. If it's lost, a new secret is generated and
+residents' new reports no longer link to their old ones.
 
 ## Not in the database
 

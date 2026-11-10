@@ -80,11 +80,11 @@ BTN_TYPE_PLACE = "ప్రదేశం పేరు టైప్ చేయం�
 # Location received.
 LOCATION_RECEIVED = "లొకేషన్ అందింది."
 
-# NEW: Type the name of the place in Visakhapatnam: a landmark, shop, road or area.
-# For example: Jagadamba Junction.
+# NEW: Type the name of the place: a landmark, shop, road or area, and the town or city.
+# For example: Jagadamba Junction, Visakhapatnam.
 TYPE_PLACE = (
-    "విశాఖపట్నంలోని ప్రదేశం పేరు టైప్ చేయండి: ఏదైనా గుర్తు, దుకాణం, రోడ్డు లేదా ప్రాంతం. "
-    "ఉదాహరణకు: జగదాంబ జంక్షన్."
+    "ప్రదేశం పేరు టైప్ చేయండి: ఏదైనా గుర్తు, దుకాణం, రోడ్డు లేదా ప్రాంతం, దానితో పాటు పట్టణం లేదా నగరం పేరు. "
+    "ఉదాహరణకు: జగదాంబ జంక్షన్, విశాఖపట్నం."
 )
 
 # NEW: Which of these is the place? Tap it, or type its number.
@@ -98,11 +98,11 @@ PLACE_SEARCH_FAILED = (
 
 
 def place_not_found(query: str) -> str:
-    """NEW: No place called "QUERY" was found in Visakhapatnam. Try a nearby landmark or the
-    area name, or use the buttons."""
+    """NEW: No place called "QUERY" was found. Try a nearby landmark, or add the area or city
+    name, or use the buttons."""
     return (
-        f"విశాఖపట్నంలో \"{query}\" అనే ప్రదేశం కనబడలేదు. "
-        "దగ్గరలోని ఏదైనా గుర్తు లేదా ప్రాంతం పేరుతో ప్రయత్నించండి, లేదా బటన్‌లను ఉపయోగించండి."
+        f"\"{query}\" అనే ప్రదేశం కనబడలేదు. "
+        "దగ్గరలోని ఏదైనా గుర్తుతో ప్రయత్నించండి, లేదా ప్రాంతం లేదా నగరం పేరు కలపండి, లేదా బటన్‌లను ఉపయోగించండి."
     )
 
 

@@ -73,7 +73,7 @@ def test_telegram_parsing():
     assert parse_update(F.audio("42")).type == "unsupported"  # voice notes aren't accepted
 
 
-def test_place_search_keeps_only_results_inside_the_city(monkeypatch):
+def test_place_search_is_not_limited_to_one_area(monkeypatch):
     from app import places
     from app.config import Settings
 
@@ -102,9 +102,21 @@ def test_place_search_keeps_only_results_inside_the_city(monkeypatch):
     monkeypatch.setattr(places.httpx, "get", fake_get)
     monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
     found = places.search("jagadamba", Settings(), "te")
-    assert found == [places.Place("Jagadamba Junction", "Dwaraka Nagar, Visakhapatnam", 17.7124, 83.3030)]
+    assert found == [
+        places.Place("Jagadamba Junction", "Dwaraka Nagar, Visakhapatnam", 17.7124, 83.3030),  # duplicate dropped
+        places.Place("Ameerpet", "Hyderabad, Telangana", 17.4375, 78.4483),  # other cities are kept
+    ]
     assert seen["url"] == places.NOMINATIM_URL
-    assert seen["params"]["bounded"] == 1 and "key" not in seen["params"] and seen["params"]["accept-language"] == "te"
+    assert "viewbox" not in seen["params"] and "bounded" not in seen["params"]
+    assert "key" not in seen["params"] and seen["params"]["accept-language"] == "te"
+
+
+def test_place_address_names_the_city():
+    from app import places
+
+    item = {"name": "Bus Stand", "display_name": "Bus Stand, ...",
+            "address": {"road": "MG Road", "neighbourhood": "Old Town", "suburb": "Ward 5", "city": "Guntur"}}
+    assert places._place(item, 16.3, 80.4).address == "MG Road, Old Town, Guntur"
 
 
 def test_place_search_failure_returns_none(monkeypatch):
@@ -117,3 +129,21 @@ def test_place_search_failure_returns_none(monkeypatch):
     monkeypatch.setattr(places.httpx, "get", boom)
     monkeypatch.setattr(places, "_wait_for_nominatim", lambda: None)
     assert places.search("x", Settings(), "en") is None
+
+
+def test_reporter_hash_secret_is_generated_once_and_kept_in_the_database(client):
+    from app import audit
+    from app.db import SessionLocal, init_db
+    from app.models import AppSecret
+
+    with SessionLocal() as db:
+        secret = db.get(AppSecret, audit.REPORTER_HASH_SECRET).value  # created on startup
+        assert len(secret) >= 32
+        first = audit.reporter_hash(db, "tg:123")
+
+    init_db()  # a restart keeps the same secret
+    with SessionLocal() as db:
+        assert db.get(AppSecret, audit.REPORTER_HASH_SECRET).value == secret
+        assert audit.reporter_hash(db, "tg:123") == first  # same resident, same hash
+        assert audit.reporter_hash(db, "tg:456") != first
+        assert len(first) == 32 and all(c in "0123456789abcdef" for c in first)  # hex, not the chat ID

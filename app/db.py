@@ -25,6 +25,11 @@ def init_db() -> None:
     settings.media_dir.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
 
+    from app.audit import ensure_secrets
+
+    with SessionLocal() as db:
+        ensure_secrets(db)
+
 
 def get_db() -> Iterator[Session]:
     db = SessionLocal()
