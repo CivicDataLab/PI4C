@@ -18,14 +18,16 @@ Open http://localhost:5500.
 
 ## What it shows
 
-- Headline numbers: total, open, resolved, high/critical, PwD reports, needs review, distinct problems, with photo
-- A map of reports, coloured by status; larger dots are PwD reports
-- Counts by status, department and issue type, plus reports per day, week or month
-- A paginated report list. Click a row or map dot to see the photo, description, location and details.
-- An update form for status, severity, department, note and needs-review. It only works when the server has `WRITE_ACCESS=true`; otherwise the dashboard shows **Read-only**.
-- Filters for category, status, severity, department, date range (IST), PwD only and needs review. **Export CSV** downloads the filtered reports.
+The sidebar picks the area and the issue category (all, accessibility, general civic, disaster/climate) and holds the extra filters: PwD only, needs review, and a date range in IST. The dropdowns above the content filter by status, severity and department. Every number, chart and list follows these filters.
 
-**GVMC area only** (on by default) limits everything to a bounding box around GVMC, from Anakapalle to Bheemunipatnam. Turn it off to see reports from anywhere.
+- Headline numbers: total, open, resolved, high/critical, PwD reports, needs review, distinct problems, with photo
+- **Map View:** reports coloured by severity. Larger dots are PwD reports and faded dots are closed. A side panel shows status and open reports by department.
+- **Chart View:** reports per day, week or month, plus counts by status, severity, department and issue type
+- **Table View:** a paginated report list
+- Click a row or map dot to see the photo, description, location and details, plus an update form for status, severity, department, note and needs-review. The form only works when the server has `WRITE_ACCESS=true`; otherwise the dashboard shows **Read-only**.
+- **Export CSV** / **Download CSV** downloads the filtered reports.
+
+The area is **GVMC area** by default: a bounding box around GVMC, from Anakapalle to Bheemunipatnam. Choose **All locations** to see reports from anywhere.
 
 ## Settings
 

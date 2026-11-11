@@ -4,86 +4,160 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GVMC Grievance Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <h1>GVMC Grievance Dashboard</h1>
-      <p class="sub">Citizen reports from the PI4C Telegram bot · Greater Visakhapatnam Municipal Corporation</p>
+    <div class="brand">
+      <span class="brand-small">Citizen Grievance Dashboard for<br>Greater Visakhapatnam</span>
+      <span class="brand-mark">GVMC</span>
     </div>
-    <div class="topbar-actions">
-      <span id="updated" class="muted"></span>
+    <nav class="topnav">
+      <span id="updated" class="updated"></span>
       <span id="write-badge" class="badge" hidden></span>
-      <button id="refresh" type="button">Refresh</button>
-      <a id="csv" class="button" href="#" download>Export CSV</a>
-    </div>
+      <button id="refresh" type="button" class="navlink">Refresh</button>
+      <a id="csv" class="navlink" href="#" download>Export CSV</a>
+    </nav>
   </header>
 
-  <form id="filters" class="filters" aria-label="Filters">
-    <label>Category<select name="category"><option value="">All</option></select></label>
-    <label>Status<select name="status"><option value="">All</option></select></label>
-    <label>Severity<select name="severity"><option value="">All</option></select></label>
-    <label>Department<select name="department_id"><option value="">All</option></select></label>
-    <label>From<input type="date" name="from"></label>
-    <label>To<input type="date" name="to"></label>
-    <label class="check"><input type="checkbox" name="pwd_marker"> PwD reports only</label>
-    <label class="check"><input type="checkbox" name="needs_review"> Needs review</label>
-    <label class="check"><input type="checkbox" name="gvmc_only" checked> GVMC area only</label>
-    <button type="reset">Reset</button>
-  </form>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Dashboard controls">
+      <h2 class="side-title">Analytics Dashboard</h2>
+      <select id="area" class="big-select" aria-label="Area">
+        <option value="gvmc" selected>GVMC area</option>
+        <option value="all">All locations</option>
+      </select>
 
-  <div id="error" class="error" role="alert" hidden></div>
+      <h2 class="side-title">Issue Categories</h2>
+      <ul class="indicators" id="indicators">
+        <li><button type="button" data-category="" class="active">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h16v2H4z"/></svg>
+          All reports</button></li>
+        <li><button type="button" data-category="accessibility">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2"/><path d="M19 13v-2c-1.5 0-3.1-.8-4.1-1.9l-1.3-1.5c-.3-.4-.9-.6-1.4-.6h-.1c-1.1 0-2 .9-2 2v5.7c0 1.1.9 2 2 2h5v5h2v-5.5c0-1.1-.9-2-2-2h-3v-3.4c1.3 1.1 3.1 2.1 4.9 2.2zm-6.2 5c-.4 1.2-1.5 2-2.8 2-1.7 0-3-1.3-3-3 0-1.3.8-2.4 2-2.8v-2.1c-2.3.5-4 2.5-4 4.9 0 2.8 2.2 5 5 5 2.4 0 4.4-1.7 4.9-4z"/></svg>
+          Accessibility</button></li>
+        <li><button type="button" data-category="civic">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8v2h20V8zm-7 9v6h3v-6zm5 0v6h4v-6zm6 0v6h3v-6zM2 20v2h20v-2z"/></svg>
+          General Civic</button></li>
+        <li><button type="button" data-category="disaster">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2zm12-3h-2v-2h2zm0-4h-2v-4h2z"/></svg>
+          Disaster / Climate</button></li>
+      </ul>
 
-  <main>
-    <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+      <form id="filters" class="side-filters" aria-label="More filters">
+        <h2 class="side-title">Filters</h2>
+        <label class="check"><input type="checkbox" name="pwd_marker"> PwD reports only</label>
+        <label class="check"><input type="checkbox" name="needs_review"> Needs review</label>
+        <label>From<input type="date" name="from"></label>
+        <label>To<input type="date" name="to"></label>
+      </form>
 
-    <section class="grid two">
-      <div class="card map-card">
-        <div class="card-head"><h2>Map</h2><span class="legend" id="legend"></span></div>
-        <div id="map"></div>
-      </div>
-      <div class="stack">
-        <div class="card"><h2>By status</h2><div id="by-status" class="bars"></div></div>
-        <div class="card"><h2>By department</h2><div id="by-department" class="bars"></div></div>
-      </div>
-    </section>
+      <hr>
+      <h2 class="side-title">Actions</h2>
+      <ul class="actions">
+        <li><a id="csv-side" href="#" download>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z"/></svg>Download CSV</a></li>
+        <li><button id="reset" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H4c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z"/></svg>Reset filters</button></li>
+      </ul>
+    </aside>
 
-    <section class="grid two">
-      <div class="card">
-        <div class="card-head">
-          <h2>Reports over time</h2>
-          <select id="interval" aria-label="Interval">
-            <option value="day">Daily</option>
-            <option value="week" selected>Weekly</option>
-            <option value="month">Monthly</option>
-          </select>
+    <main class="content">
+      <div class="content-head">
+        <h1 id="view-title">All reports</h1>
+        <div class="tabs" role="tablist" aria-label="View">
+          <button type="button" role="tab" data-view="map" class="active" aria-selected="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-6-2-6 2v16l6-2 6 2 6-2V3zm-1 14.3-4-1.4V4.7l4 1.4z" fill-rule="evenodd"/></svg>Map View</button>
+          <button type="button" role="tab" data-view="chart" aria-selected="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18v-2H3zM5 17h3V9H5zm5.5 0h3V4h-3zm5.5 0h3v-6h-3z"/></svg>Chart View</button>
+          <button type="button" role="tab" data-view="table" aria-selected="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v18H3zm2 2v4h14V5zm0 6v8h4v-8zm6 0v8h8v-8z"/></svg>Table View</button>
         </div>
-        <div id="timeseries" class="columns"></div>
       </div>
-      <div class="card"><h2>By issue type</h2><div id="by-subcategory" class="bars"></div></div>
-    </section>
 
-    <section class="card">
-      <div class="card-head">
-        <h2>Reports <span id="report-total" class="muted"></span></h2>
-        <div class="pager">
-          <button id="prev" type="button">‹ Prev</button>
-          <span id="page-info" class="muted"></span>
-          <button id="next" type="button">Next ›</button>
+      <div class="selects" id="selects">
+        <label>Select Status<select name="status" class="big-select"><option value="">All statuses</option></select></label>
+        <label>Select Severity<select name="severity" class="big-select"><option value="">All severities</option></select></label>
+        <label>Select Department<select name="department_id" class="big-select"><option value="">All departments</option></select></label>
+      </div>
+
+      <div id="error" class="error" role="alert" hidden></div>
+
+      <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+
+      <section class="view" data-view="map">
+        <div class="map-wrap">
+          <div id="map"></div>
+          <div class="legend" id="legend"></div>
+          <aside class="info-panel" id="info-panel">
+            <button type="button" class="info-close" id="info-close" aria-label="Hide panel">✕</button>
+            <h2>Know your reports</h2>
+            <div class="info-item">
+              <h3>Severity <span class="muted">(dot colour)</span></h3>
+              <p>Set by the classifier from the issue type and what the resident described. Click a dot to open the report.</p>
+            </div>
+            <div class="info-item">
+              <h3>01. Status</h3>
+              <div id="info-status" class="bars"></div>
+            </div>
+            <div class="info-item">
+              <h3>02. Open reports by department</h3>
+              <div id="info-dept" class="bars"></div>
+            </div>
+            <div class="info-item">
+              <h3>03. PwD marker</h3>
+              <p>Larger dots are reports from or for persons with disabilities. Faded dots are resolved or rejected.</p>
+            </div>
+          </aside>
+          <button type="button" class="info-open" id="info-open" hidden>Know your reports</button>
         </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Ref</th><th>Reported</th><th>Issue</th><th>Department</th><th>Severity</th><th>Status</th><th>PwD</th><th>Location</th></tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
+      </section>
+
+      <section class="view" data-view="chart" hidden>
+        <div class="chart-grid">
+          <div class="card wide">
+            <div class="card-head">
+              <h2>Reports over time</h2>
+              <select id="interval" aria-label="Interval">
+                <option value="day">Daily</option>
+                <option value="week" selected>Weekly</option>
+                <option value="month">Monthly</option>
+              </select>
+            </div>
+            <div id="timeseries" class="columns"></div>
+          </div>
+          <div class="card"><h2>By status</h2><div id="by-status" class="bars"></div></div>
+          <div class="card"><h2>By severity</h2><div id="by-severity" class="bars"></div></div>
+          <div class="card"><h2>By department</h2><div id="by-department" class="bars"></div></div>
+          <div class="card"><h2>By issue type</h2><div id="by-subcategory" class="bars"></div></div>
+        </div>
+      </section>
+
+      <section class="view" data-view="table" hidden>
+        <div class="card">
+          <div class="card-head">
+            <h2>Reports <span id="report-total" class="muted"></span></h2>
+            <div class="pager">
+              <button id="prev" type="button">‹ Prev</button>
+              <span id="page-info" class="muted"></span>
+              <button id="next" type="button">Next ›</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Ref</th><th>Reported</th><th>Issue</th><th>Department</th><th>Severity</th><th>Status</th><th>PwD</th><th>Location</th></tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <aside id="drawer" class="drawer" hidden aria-label="Report details">
     <div class="drawer-head">
@@ -106,6 +180,6 @@
   </aside>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

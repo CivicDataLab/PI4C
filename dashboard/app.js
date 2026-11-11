@@ -11,12 +11,15 @@ const PAGE_SIZE = 25;
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
 
 const STATUSES = ["new", "acknowledged", "in_progress", "resolved", "rejected"];
-const SEVERITIES = ["low", "medium", "high", "critical"];
+const CLOSED = new Set(["resolved", "rejected"]);
+const SEVERITIES = ["critical", "high", "medium", "low"];
 
 const state = {
   categories: {},     // id -> label
   subcategories: {},  // id -> label
   departments: {},    // id -> name
+  category: "",
+  view: "map",
   offset: 0,
   writeAccess: false,
   openReport: null,
@@ -39,7 +42,7 @@ const catLabel = (id) => state.categories[id] || humanize(id);
 const subLabel = (id) => state.subcategories[id] || humanize(id);
 const deptLabel = (id) => (id ? state.departments[id] || humanize(id) : "Unassigned");
 const statusColor = (s) => css(`--s-${s}`) || css("--s-rejected");
-const sevColor = (s) => css(`--sev-${s}`) || css("--sev-low");
+const sevColor = (s) => css(`--sev-${s}`) || "#9aa0a6";
 
 // The API sends UTC timestamps without a zone suffix.
 function parseUtc(iso) {
@@ -50,9 +53,11 @@ function fmtDateTime(iso) {
   return parseUtc(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function pill(text, color) {
-  return `<span class="pill" style="background:${color}">${esc(text)}</span>`;
+function pill(text, color, light = false) {
+  return `<span class="pill${light ? " light" : ""}" style="background:${color}">${esc(text)}</span>`;
 }
+
+const sevPill = (s) => (s ? pill(humanize(s), sevColor(s), s === "medium") : "—");
 
 async function api(path, params, options = {}) {
   const qs = params && params.toString() ? `?${params}` : "";
@@ -76,14 +81,15 @@ function showError(message) {
 // ---- filters -------------------------------------------------------------------------------
 
 function filterParams() {
-  const f = $("#filters").elements;
   const p = new URLSearchParams();
-  for (const name of ["category", "status", "severity", "department_id"]) {
-    if (f[name].value) p.set(name, f[name].value);
+  if (state.category) p.set("category", state.category);
+  for (const select of $("#selects").querySelectorAll("select")) {
+    if (select.value) p.set(select.name, select.value);
   }
+  if ($("#area").value === "gvmc") p.set("bbox", GVMC_BBOX);
+  const f = $("#filters").elements;
   if (f.pwd_marker.checked) p.set("pwd_marker", "true");
   if (f.needs_review.checked) p.set("needs_review", "true");
-  if (f.gvmc_only.checked) p.set("bbox", GVMC_BBOX);
   // Dates are picked in IST; the API takes any ISO time and "to" is exclusive, so use the next midnight.
   if (f.from.value) p.set("created_from", new Date(`${f.from.value}T00:00:00+05:30`).toISOString());
   if (f.to.value) {
@@ -94,9 +100,9 @@ function filterParams() {
   return p;
 }
 
-function withParams(base, extra) {
+function withParams(base, ...pairs) {
   const p = new URLSearchParams(base);
-  for (const [k, v] of Object.entries(extra)) p.append(k, v);
+  for (const [k, v] of pairs) p.append(k, v);
   return p;
 }
 
@@ -115,18 +121,19 @@ async function loadMeta() {
   }
   for (const d of depts.departments) state.departments[d.id] = d.name_en;
 
-  const f = $("#filters").elements;
-  fillSelect(f.category, taxonomy.categories.map((c) => [c.id, c.label_en]));
-  fillSelect(f.status, STATUSES.map((s) => [s, humanize(s)]));
-  fillSelect(f.severity, SEVERITIES.map((s) => [s, humanize(s)]));
-  fillSelect(f.department_id, depts.departments.map((d) => [d.id, d.name_en]));
+  const s = $("#selects");
+  fillSelect(s.querySelector("[name=status]"), STATUSES.map((x) => [x, humanize(x)]));
+  fillSelect(s.querySelector("[name=severity]"), SEVERITIES.map((x) => [x, humanize(x)]));
+  fillSelect(s.querySelector("[name=department_id]"), depts.departments.map((d) => [d.id, d.name_en]));
 
   const d = $("#d-form").elements;
-  fillSelect(d.status, STATUSES.map((s) => [s, humanize(s)]), { keepFirst: false });
-  fillSelect(d.severity, SEVERITIES.map((s) => [s, humanize(s)]), { keepFirst: false });
+  fillSelect(d.status, STATUSES.map((x) => [x, humanize(x)]), { keepFirst: false });
+  fillSelect(d.severity, SEVERITIES.map((x) => [x, humanize(x)]), { keepFirst: false });
   fillSelect(d.department_id, depts.departments.map((x) => [x.id, x.name_en]), { keepFirst: false });
 
-  $("#legend").innerHTML = STATUSES.map((s) => `<span><span class="dot" style="background:${statusColor(s)}"></span>${humanize(s)}</span>`).join("");
+  $("#legend").innerHTML = SEVERITIES
+    .map((x) => `<div><span class="swatch" style="background:${sevColor(x)}"></span>${humanize(x)} severity</div>`)
+    .join("");
 }
 
 // Write endpoints answer 403 when WRITE_ACCESS=false. Report 0 never exists, so 404 means writing is on.
@@ -155,26 +162,34 @@ function initMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
   markers = L.featureGroup().addTo(map);
+  // Leaflet only re-measures on window resize; layout changes (panels, view tabs, narrow screens) need this too
+  new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
 }
 
 function renderMap(geojson, fit) {
   markers.clearLayers();
-  for (const f of geojson.features) {
+  // Draw closed reports first so open ones sit on top
+  const features = [...geojson.features].sort((a, b) => CLOSED.has(b.properties.status) - CLOSED.has(a.properties.status));
+  for (const f of features) {
     const [lon, lat] = f.geometry.coordinates;
     const p = f.properties;
+    const closed = CLOSED.has(p.status);
     L.circleMarker([lat, lon], {
-      radius: p.pwd_marker ? 8 : 6,
-      color: "#ffffff",
-      weight: 1.5,
-      fillColor: statusColor(p.status),
-      fillOpacity: 0.9,
+      radius: p.pwd_marker ? 9 : 6,
+      color: closed ? "#8a9099" : "#1b1d24",
+      weight: 1,
+      fillColor: sevColor(p.severity),
+      fillOpacity: closed ? 0.3 : 0.9,
     })
-      .bindTooltip(`<b>${esc(p.ref)}</b><br>${esc(subLabel(p.barrier_type))} · ${esc(humanize(p.status))}`)
+      .bindTooltip(`<b>${esc(p.ref)}</b><br>${esc(subLabel(p.barrier_type))}<br>${esc(humanize(p.severity))} severity · ${esc(humanize(p.status))}`)
       .on("click", () => openReport(f.id))
       .addTo(markers);
   }
   if (!fit) return;
-  if (geojson.features.length) map.fitBounds(markers.getBounds(), { padding: [30, 30], maxZoom: 15 });
+  // Keep the dots clear of the info panel when it is open over the right side of the map
+  const panel = $("#info-panel");
+  const right = panel.hidden || panel.offsetParent === null || getComputedStyle(panel).position !== "absolute" ? 40 : panel.offsetWidth + 40;
+  if (geojson.features.length) map.fitBounds(markers.getBounds(), { paddingTopLeft: [40, 40], paddingBottomRight: [right, 40], maxZoom: 15 });
   else map.setView(GVMC_CENTER, 12);
 }
 
@@ -235,6 +250,12 @@ function renderKpis(s) {
     .join("");
 }
 
+function sumBy(rows, key, keep = () => true) {
+  const totals = new Map();
+  for (const r of rows) if (keep(r)) totals.set(r[key], (totals.get(r[key]) || 0) + r.count);
+  return [...totals].map(([k, count]) => ({ key: k, count })).sort((a, b) => b.count - a.count);
+}
+
 // ---- table ---------------------------------------------------------------------------------
 
 function renderTable(page) {
@@ -256,7 +277,7 @@ function renderTable(page) {
         <td>${esc(fmtDateTime(r.created_at))}</td>
         <td>${esc(subLabel(r.subcategory))} <span class="muted">· ${esc(catLabel(r.category))}</span></td>
         <td>${esc(deptLabel(r.department_id))}</td>
-        <td>${r.severity ? pill(humanize(r.severity), sevColor(r.severity)) : "—"}</td>
+        <td>${sevPill(r.severity)}</td>
         <td>${pill(humanize(r.status), statusColor(r.status))}</td>
         <td>${r.pwd_marker ? "Yes" : ""}</td>
         <td class="loc" title="${esc(r.location_address || r.location_name || "")}">${esc(r.location_name || r.location_address || `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`)}</td>
@@ -269,25 +290,41 @@ function renderTable(page) {
 async function refresh({ fit = false } = {}) {
   const p = filterParams();
   const interval = $("#interval").value;
-  $("#csv").href = `${API}/reports.csv?${p}`;
+  const csv = `${API}/reports.csv?${p}`;
+  $("#csv").href = csv;
+  $("#csv-side").href = csv;
+  $("#view-title").textContent = state.category ? catLabel(state.category) : "All reports";
   try {
-    const [summary, byStatus, byDept, bySub, series, geojson, page] = await Promise.all([
+    const [summary, byStatus, bySeverity, byDeptStatus, bySub, series, geojson, page] = await Promise.all([
       api("/stats/summary", p),
-      api("/stats/counts", withParams(p, { group_by: "status" })),
-      api("/stats/counts", withParams(p, { group_by: "department_id" })),
-      api("/stats/counts", withParams(withParams(p, { group_by: "category" }), { group_by: "subcategory" })),
-      api("/stats/timeseries", withParams(p, { interval })),
-      api("/reports.geojson", withParams(p, { limit: 5000 })),
-      api("/reports", withParams(p, { limit: PAGE_SIZE, offset: state.offset })),
+      api("/stats/counts", withParams(p, ["group_by", "status"])),
+      api("/stats/counts", withParams(p, ["group_by", "severity"])),
+      api("/stats/counts", withParams(p, ["group_by", "department_id"], ["group_by", "status"])),
+      api("/stats/counts", withParams(p, ["group_by", "category"], ["group_by", "subcategory"])),
+      api("/stats/timeseries", withParams(p, ["interval", interval])),
+      api("/reports.geojson", withParams(p, ["limit", 5000])),
+      api("/reports", withParams(p, ["limit", PAGE_SIZE], ["offset", state.offset])),
     ]);
     showError("");
     renderKpis(summary);
-    renderBars($("#by-status"), STATUSES.map((s) => ({
+
+    const statusRows = STATUSES.map((s) => ({
       label: humanize(s),
       count: byStatus.find((r) => r.status === s)?.count || 0,
       color: statusColor(s),
+    })).filter((r) => r.count);
+    renderBars($("#by-status"), statusRows);
+    renderBars($("#info-status"), statusRows);
+
+    renderBars($("#by-severity"), SEVERITIES.map((s) => ({
+      label: humanize(s),
+      count: bySeverity.find((r) => r.severity === s)?.count || 0,
+      color: sevColor(s),
     })).filter((r) => r.count));
-    renderBars($("#by-department"), byDept.sort((a, b) => b.count - a.count).map((r) => ({ label: deptLabel(r.department_id), count: r.count })));
+
+    renderBars($("#by-department"), sumBy(byDeptStatus, "department_id").map((r) => ({ label: deptLabel(r.key), count: r.count })));
+    renderBars($("#info-dept"), sumBy(byDeptStatus, "department_id", (r) => !CLOSED.has(r.status)).map((r) => ({ label: deptLabel(r.key), count: r.count })));
+
     renderBars($("#by-subcategory"), bySub.sort((a, b) => b.count - a.count).map((r) => ({
       label: r.subcategory === "other" ? `Other (${catLabel(r.category)})` : subLabel(r.subcategory),
       count: r.count,
@@ -400,17 +437,51 @@ async function saveReport(event) {
   }
 }
 
-// ---- wiring --------------------------------------------------------------------------------
+// ---- views & wiring ------------------------------------------------------------------------
+
+function showView(view) {
+  state.view = view;
+  for (const tab of document.querySelectorAll(".tabs button")) {
+    const active = tab.dataset.view === view;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", String(active));
+  }
+  for (const section of document.querySelectorAll("section.view")) section.hidden = section.dataset.view !== view;
+  if (view === "map") map.invalidateSize();
+}
+
+function selectCategory(category) {
+  state.category = category;
+  for (const btn of document.querySelectorAll("#indicators button")) btn.classList.toggle("active", btn.dataset.category === category);
+  onFiltersChanged();
+}
 
 function onFiltersChanged() {
   state.offset = 0;
   refresh({ fit: true });
 }
 
+function resetAll() {
+  $("#filters").reset();
+  for (const select of $("#selects").querySelectorAll("select")) select.value = "";
+  $("#area").value = "gvmc";
+  selectCategory("");
+}
+
 async function main() {
   initMap();
-  $("#filters").addEventListener("change", onFiltersChanged);
-  $("#filters").addEventListener("reset", () => setTimeout(onFiltersChanged));
+  $("#indicators").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-category]");
+    if (btn) selectCategory(btn.dataset.category);
+  });
+  for (const el of [$("#filters"), $("#selects"), $("#area")]) el.addEventListener("change", onFiltersChanged);
+  $("#reset").addEventListener("click", resetAll);
+  document.querySelector(".tabs").addEventListener("click", (e) => {
+    const tab = e.target.closest("button[data-view]");
+    if (tab) showView(tab.dataset.view);
+  });
+  $("#info-close").addEventListener("click", () => { $("#info-panel").hidden = true; $("#info-open").hidden = false; });
+  $("#info-open").addEventListener("click", () => { $("#info-panel").hidden = false; $("#info-open").hidden = true; });
   $("#interval").addEventListener("change", () => refresh());
   $("#refresh").addEventListener("click", () => refresh());
   $("#prev").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE_SIZE); refresh(); });
