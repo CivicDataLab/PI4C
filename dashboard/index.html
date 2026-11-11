@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GVMC Grievance Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>GVMC Grievance Dashboard</h1>
+      <p class="sub">Citizen reports from the PI4C Telegram bot · Greater Visakhapatnam Municipal Corporation</p>
+    </div>
+    <div class="topbar-actions">
+      <span id="updated" class="muted"></span>
+      <span id="write-badge" class="badge" hidden></span>
+      <button id="refresh" type="button">Refresh</button>
+      <a id="csv" class="button" href="#" download>Export CSV</a>
+    </div>
+  </header>
+
+  <form id="filters" class="filters" aria-label="Filters">
+    <label>Category<select name="category"><option value="">All</option></select></label>
+    <label>Status<select name="status"><option value="">All</option></select></label>
+    <label>Severity<select name="severity"><option value="">All</option></select></label>
+    <label>Department<select name="department_id"><option value="">All</option></select></label>
+    <label>From<input type="date" name="from"></label>
+    <label>To<input type="date" name="to"></label>
+    <label class="check"><input type="checkbox" name="pwd_marker"> PwD reports only</label>
+    <label class="check"><input type="checkbox" name="needs_review"> Needs review</label>
+    <label class="check"><input type="checkbox" name="gvmc_only" checked> GVMC area only</label>
+    <button type="reset">Reset</button>
+  </form>
+
+  <div id="error" class="error" role="alert" hidden></div>
+
+  <main>
+    <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+
+    <section class="grid two">
+      <div class="card map-card">
+        <div class="card-head"><h2>Map</h2><span class="legend" id="legend"></span></div>
+        <div id="map"></div>
+      </div>
+      <div class="stack">
+        <div class="card"><h2>By status</h2><div id="by-status" class="bars"></div></div>
+        <div class="card"><h2>By department</h2><div id="by-department" class="bars"></div></div>
+      </div>
+    </section>
+
+    <section class="grid two">
+      <div class="card">
+        <div class="card-head">
+          <h2>Reports over time</h2>
+          <select id="interval" aria-label="Interval">
+            <option value="day">Daily</option>
+            <option value="week" selected>Weekly</option>
+            <option value="month">Monthly</option>
+          </select>
+        </div>
+        <div id="timeseries" class="columns"></div>
+      </div>
+      <div class="card"><h2>By issue type</h2><div id="by-subcategory" class="bars"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Reports <span id="report-total" class="muted"></span></h2>
+        <div class="pager">
+          <button id="prev" type="button">‹ Prev</button>
+          <span id="page-info" class="muted"></span>
+          <button id="next" type="button">Next ›</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Ref</th><th>Reported</th><th>Issue</th><th>Department</th><th>Severity</th><th>Status</th><th>PwD</th><th>Location</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <aside id="drawer" class="drawer" hidden aria-label="Report details">
+    <div class="drawer-head">
+      <h2 id="d-title"></h2>
+      <button id="d-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div id="d-body"></div>
+    <form id="d-form" class="update">
+      <h3>Update report</h3>
+      <p id="d-readonly" class="muted" hidden>Updating is turned off on the server (WRITE_ACCESS=false).</p>
+      <label>Status<select name="status"></select></label>
+      <label>Severity<select name="severity"></select></label>
+      <label>Department<select name="department_id"></select></label>
+      <label>Status note<textarea name="status_note" rows="3"></textarea></label>
+      <label class="check"><input type="checkbox" name="needs_review"> Needs review</label>
+      <button type="submit">Save changes</button>
+      <span id="d-msg" class="muted"></span>
+    </form>
+    <div id="d-log"></div>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
