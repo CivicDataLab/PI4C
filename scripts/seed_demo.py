@@ -1,11 +1,14 @@
 """Fill the database with demo reports around Visakhapatnam (GVMC) for trying out the dashboard.
 
-    uv run python scripts/seed_demo.py            # add 100 demo reports
+    uv run python scripts/seed_demo.py               # add 100 demo reports
     uv run python scripts/seed_demo.py --count 50
-    uv run python scripts/seed_demo.py --clear    # remove every demo report (real reports are untouched)
+    uv run python scripts/seed_demo.py --add-photos  # give photos to demo reports that have none
+    uv run python scripts/seed_demo.py --clear       # remove every demo report (real reports are untouched)
 
 Demo reports have channel "demo", so they are easy to find and remove. They look like what the
 bot produces with the rules classifier: no confidence score, no AI summary, no translation.
+About four in five get a photo from data/demo_photos/ (one or two per issue type, reused;
+see data/demo_photos/CREDITS.md).
 """
 
 import argparse
@@ -22,10 +25,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import delete, func, select  # noqa: E402
 
 from app.db import SessionLocal, init_db  # noqa: E402
-from app.models import Cluster, Report, utcnow  # noqa: E402
+from app.models import Cluster, Media, MediaFile, Report, utcnow  # noqa: E402
 from app import taxonomy  # noqa: E402
 
 DEMO_CHANNEL = "demo"
+PHOTO_DIR = Path(__file__).resolve().parents[1] / "data" / "demo_photos"
+PHOTO_RATE = 0.8  # share of demo reports that get a photo
 
 # Localities across GVMC with approximate centres (lat, lon).
 LOCALITIES = [
@@ -156,6 +161,35 @@ def pick_status(age_days: float, rng: random.Random) -> str:
     return rng.choices(statuses, weights)[0]
 
 
+def load_photos() -> dict[str, list[bytes]]:
+    """Photos keyed by "<category>-<subcategory>"; "civic-road-2.jpg" is a second photo for civic-road."""
+    photos: dict[str, list[bytes]] = {}
+    for path in sorted(PHOTO_DIR.glob("*.jpg")):
+        key = path.stem[:-2] if path.stem[-2:] in {f"-{n}" for n in range(2, 10)} else path.stem
+        photos.setdefault(key, []).append(path.read_bytes())
+    return photos
+
+
+def attach_photo(report: Report, photos: dict[str, list[bytes]], rng: random.Random) -> bool:
+    options = photos.get(f"{report.category}-{report.subcategory}")
+    if not options:
+        return False
+    media = Media(kind="image", mime_type="image/jpeg", created_at=report.created_at)
+    media.file = MediaFile.from_bytes(rng.choice(options))
+    report.media.append(media)
+    return True
+
+
+def add_photos(db, rng: random.Random) -> int:
+    photos = load_photos()
+    added = 0
+    for report in db.scalars(select(Report).where(Report.channel == DEMO_CHANNEL).order_by(Report.id)):
+        if not report.media and rng.random() < PHOTO_RATE:
+            added += attach_photo(report, photos, rng)
+    db.commit()
+    return added
+
+
 def clear_demo(db) -> int:
     report_ids = db.scalars(select(Report.id).where(Report.channel == DEMO_CHANNEL)).all()
     for report in db.scalars(select(Report).where(Report.id.in_(report_ids))):
@@ -173,6 +207,7 @@ def seed(db, count: int, rng: random.Random) -> int:
         (c["id"], s["id"]): s["default_department"] for c in taxonomy.categories() for s in c["subcategories"]
     }
     dept_names = {d["id"]: d["name_en"] for d in taxonomy.departments()}
+    photos = load_photos()
     subcats = {cat: [s for (c, s) in DESCRIPTIONS if c == cat] for cat in CATEGORY_WEIGHTS}
 
     now = utcnow()
@@ -272,6 +307,8 @@ def seed(db, count: int, rng: random.Random) -> int:
         cluster.last_seen = created
         report.cluster = cluster
         cluster_reports[cluster.id].append(report)
+        if rng.random() < PHOTO_RATE:
+            attach_photo(report, photos, rng)
         db.add(report)
 
         if n % 25 == 0:
@@ -290,6 +327,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--count", type=int, default=100)
     parser.add_argument("--clear", action="store_true", help="remove all demo reports and stop")
+    parser.add_argument("--add-photos", action="store_true", help="give photos to existing demo reports that have none, and stop")
     parser.add_argument("--seed", type=int, default=2026, help="random seed, for repeatable data")
     args = parser.parse_args()
 
@@ -297,6 +335,9 @@ def main() -> None:
     with SessionLocal() as db:
         if args.clear:
             print(f"removed {clear_demo(db)} demo reports")
+            return
+        if args.add_photos:
+            print(f"added photos to {add_photos(db, random.Random(args.seed))} demo reports")
             return
         added = seed(db, args.count, random.Random(args.seed))
         total = db.scalar(select(func.count()).select_from(Report))
