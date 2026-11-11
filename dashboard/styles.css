@@ -75,27 +75,6 @@ select, input, textarea {
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-small { font-size: 12px; line-height: 1.25; opacity: .9; }
 .brand-mark { font-size: 30px; font-weight: 800; letter-spacing: .14em; }
-.topnav { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
-.navlink {
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--nav-ink);
-  font-weight: 600;
-  font-size: 16px;
-  text-decoration: none;
-  cursor: pointer;
-}
-.navlink:hover { text-decoration: underline; }
-.updated { font-size: 13px; opacity: .75; }
-.badge {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(182, 239, 189, .2);
-  color: var(--mint);
-}
 
 /* ---- layout ---- */
 .layout { flex: 1; display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
@@ -201,7 +180,16 @@ select, input, textarea {
   gap: 8px;
   font-size: 16px;
 }
-.legend .swatch { display: inline-block; width: 34px; height: 30px; margin-right: 14px; vertical-align: middle; }
+.legend { left: 12px; bottom: 12px; padding: 10px 12px; gap: 3px; font-size: 13px; }
+.legend-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
+.legend-title:first-child { margin-top: 0; }
+.legend-row { display: flex; align-items: center; gap: 8px; }
+.legend .swatch { display: inline-block; width: 18px; height: 14px; flex: none; border-radius: 2px; }
+
+.report-marker { background: none; border: 0; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .45)); }
+.report-marker svg { display: block; overflow: visible; }
+.report-marker.closed { opacity: .4; }
+.report-marker:hover, .report-marker:focus { filter: drop-shadow(0 0 3px rgba(0, 0, 0, .7)); outline: none; }
 
 .info-panel {
   position: absolute;

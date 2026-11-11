@@ -131,9 +131,11 @@ async function loadMeta() {
   fillSelect(d.severity, SEVERITIES.map((x) => [x, humanize(x)]), { keepFirst: false });
   fillSelect(d.department_id, depts.departments.map((x) => [x.id, x.name_en]), { keepFirst: false });
 
-  $("#legend").innerHTML = SEVERITIES
-    .map((x) => `<div><span class="swatch" style="background:${sevColor(x)}"></span>${humanize(x)} severity</div>`)
-    .join("");
+  $("#legend").innerHTML = `
+    <div class="legend-title">Issue type</div>
+    ${Object.entries(SYMBOLS).map(([cat, s]) => `<div class="legend-row">${symbolSvg(cat, "#5d6573", 18)}${s.label}</div>`).join("")}
+    <div class="legend-title">Severity</div>
+    ${SEVERITIES.map((x) => `<div class="legend-row"><span class="swatch" style="background:${sevColor(x)}"></span>${humanize(x)}</div>`).join("")}`;
 }
 
 // Write endpoints answer 403 when WRITE_ACCESS=false. Report 0 never exists, so 404 means writing is on.
@@ -144,10 +146,6 @@ async function probeWriteAccess() {
   } catch {
     state.writeAccess = false;
   }
-  const badge = $("#write-badge");
-  badge.hidden = false;
-  badge.textContent = state.writeAccess ? "Editing on" : "Read-only";
-  badge.title = state.writeAccess ? "Reports can be updated from this dashboard" : "The server has WRITE_ACCESS=false";
 }
 
 // ---- map -----------------------------------------------------------------------------------
@@ -166,20 +164,60 @@ function initMap() {
   new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
 }
 
+// Each category gets its own shape and symbol; the fill colour is the severity.
+const SYMBOLS = {
+  accessibility: {
+    label: "Accessibility",
+    shape: '<circle cx="16" cy="16" r="14"/>',
+    glyph: '<g transform="translate(7 7) scale(.75)"><circle cx="12" cy="4" r="2"/><path d="M19 13v-2c-1.5 0-3.1-.8-4.1-1.9l-1.3-1.5c-.3-.4-.9-.6-1.4-.6h-.1c-1.1 0-2 .9-2 2v5.7c0 1.1.9 2 2 2h5v5h2v-5.5c0-1.1-.9-2-2-2h-3v-3.4c1.3 1.1 3.1 2.1 4.9 2.2zm-6.2 5c-.4 1.2-1.5 2-2.8 2-1.7 0-3-1.3-3-3 0-1.3.8-2.4 2-2.8v-2.1c-2.3.5-4 2.5-4 4.9 0 2.8 2.2 5 5 5 2.4 0 4.4-1.7 4.9-4z"/></g>',
+  },
+  civic: {
+    label: "General civic",
+    shape: '<rect x="3" y="3" width="26" height="26" rx="6"/>',
+    glyph: '<g transform="translate(7.5 7) scale(.72)"><path d="M12 3 2 8v2h20V8zm-7 9v6h3v-6zm5 0v6h4v-6zm6 0v6h3v-6zM2 20v2h20v-2z"/></g>',
+  },
+  disaster: {
+    label: "Disaster / climate",
+    shape: '<path d="M16 2.5 30.5 28.5h-29z" stroke-linejoin="round"/>',
+    glyph: '<rect x="14.6" y="11" width="2.8" height="9" rx="1.2"/><circle cx="16" cy="24" r="1.7"/>',
+  },
+};
+const DEFAULT_SYMBOL = { label: "Other", shape: '<circle cx="16" cy="16" r="14"/>', glyph: "" };
+
+function symbolSvg(category, fill, size) {
+  const s = SYMBOLS[category] || DEFAULT_SYMBOL;
+  // White symbols are unreadable on the yellow (medium) fill, so use dark ink there
+  const ink = fill === sevColor("medium") ? "#1b1d24" : "#ffffff";
+  return `<svg viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true">`
+    + `<g fill="${fill}" stroke="#ffffff" stroke-width="2">${s.shape}</g>`
+    + `<g fill="${ink}">${s.glyph}</g></svg>`;
+}
+
+function reportIcon(p) {
+  const size = p.pwd_marker ? 34 : 26;
+  return L.divIcon({
+    className: `report-marker${CLOSED.has(p.status) ? " closed" : ""}`,
+    html: symbolSvg(p.category, sevColor(p.severity), size),
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    tooltipAnchor: [size / 2, 0],
+  });
+}
+
 function renderMap(geojson, fit) {
   markers.clearLayers();
-  // Draw closed reports first so open ones sit on top
-  const features = [...geojson.features].sort((a, b) => CLOSED.has(b.properties.status) - CLOSED.has(a.properties.status));
-  for (const f of features) {
+  for (const f of geojson.features) {
     const [lon, lat] = f.geometry.coordinates;
     const p = f.properties;
     const closed = CLOSED.has(p.status);
-    L.circleMarker([lat, lon], {
-      radius: p.pwd_marker ? 9 : 6,
-      color: closed ? "#8a9099" : "#1b1d24",
-      weight: 1,
-      fillColor: sevColor(p.severity),
-      fillOpacity: closed ? 0.3 : 0.9,
+    L.marker([lat, lon], {
+      icon: reportIcon(p),
+      keyboard: true,
+      title: `${p.ref}: ${subLabel(p.barrier_type)}`,
+      riseOnHover: true,
+      // Open reports sit above closed ones, and bigger risks above smaller
+      zIndexOffset: (closed ? 0 : 1000) + (SEVERITIES.length - SEVERITIES.indexOf(p.severity)) * 100,
     })
       .bindTooltip(`<b>${esc(p.ref)}</b><br>${esc(subLabel(p.barrier_type))}<br>${esc(humanize(p.severity))} severity · ${esc(humanize(p.status))}`)
       .bindPopup("", { minWidth: 260, maxWidth: 300, className: "report-popup", autoPanPaddingTopLeft: [20, 60] })
@@ -337,7 +375,6 @@ async function refresh({ fit = false } = {}) {
   const p = filterParams();
   const interval = $("#interval").value;
   const csv = `${API}/reports.csv?${p}`;
-  $("#csv").href = csv;
   $("#csv-side").href = csv;
   $("#view-title").textContent = state.category ? catLabel(state.category) : "All reports";
   try {
@@ -378,7 +415,6 @@ async function refresh({ fit = false } = {}) {
     renderTimeseries(series, interval);
     renderMap(geojson, fit);
     renderTable(page);
-    $("#updated").textContent = `Updated ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
   } catch (err) {
     showError(`Could not load data from ${API}: ${err.message}. Is the PI4C API running?`);
   }
@@ -529,7 +565,6 @@ async function main() {
   $("#info-close").addEventListener("click", () => { $("#info-panel").hidden = true; $("#info-open").hidden = false; });
   $("#info-open").addEventListener("click", () => { $("#info-panel").hidden = false; $("#info-open").hidden = true; });
   $("#interval").addEventListener("change", () => refresh());
-  $("#refresh").addEventListener("click", () => refresh());
   $("#prev").addEventListener("click", () => { state.offset = Math.max(0, state.offset - PAGE_SIZE); refresh(); });
   $("#next").addEventListener("click", () => { state.offset += PAGE_SIZE; refresh(); });
   $("#rows").addEventListener("click", (e) => {
