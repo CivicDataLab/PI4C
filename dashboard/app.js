@@ -182,7 +182,14 @@ function renderMap(geojson, fit) {
       fillOpacity: closed ? 0.3 : 0.9,
     })
       .bindTooltip(`<b>${esc(p.ref)}</b><br>${esc(subLabel(p.barrier_type))}<br>${esc(humanize(p.severity))} severity · ${esc(humanize(p.status))}`)
-      .on("click", () => openReport(f.id))
+      .bindPopup("", { minWidth: 260, maxWidth: 300, className: "report-popup", autoPanPaddingTopLeft: [20, 60] })
+      .on("popupopen", (e) => {
+        e.target.closeTooltip();
+        // Build the content once per opening; a content function would be re-run (and the photo lost) on every popup.update()
+        const el = popupContent(f);
+        e.popup.setContent(el);
+        loadPopupPhoto(f.id, e.popup, el);
+      })
       .addTo(markers);
   }
   if (!fit) return;
@@ -191,6 +198,44 @@ function renderMap(geojson, fit) {
   const right = panel.hidden || panel.offsetParent === null || getComputedStyle(panel).position !== "absolute" ? 40 : panel.offsetWidth + 40;
   if (geojson.features.length) map.fitBounds(markers.getBounds(), { paddingTopLeft: [40, 40], paddingBottomRight: [right, 40], maxZoom: 15 });
   else map.setView(GVMC_CENTER, 12);
+}
+
+// Popup for a map dot: details from the GeoJSON straight away, the photo once the report has loaded.
+function popupContent(f) {
+  const p = f.properties;
+  const el = document.createElement("div");
+  el.innerHTML = `
+    <div class="popup-photo"><span class="muted">Loading photo…</span></div>
+    <div class="popup-body">
+      <div class="popup-ref">${esc(p.ref)}</div>
+      <div class="popup-issue">${esc(subLabel(p.barrier_type))} <span class="muted">· ${esc(catLabel(p.category))}</span></div>
+      <div class="popup-pills">${sevPill(p.severity)} ${pill(humanize(p.status), statusColor(p.status))}${p.pwd_marker ? ` ${pill("PwD", "#1d2033")}` : ""}</div>
+      <div class="muted popup-date">Reported ${esc(fmtDateTime(p.created_at))}</div>
+      <button type="button" class="popup-open">Open full report</button>
+    </div>`;
+  el.querySelector(".popup-open").addEventListener("click", () => openReport(f.id));
+  return el;
+}
+
+const reportCache = new Map();
+
+async function loadPopupPhoto(id, popup, el) {
+  const slot = el.querySelector(".popup-photo");
+  try {
+    if (!reportCache.has(id)) reportCache.set(id, await api(`/reports/${id}`));
+    const photo = reportCache.get(id).media.find((m) => m.kind === "image");
+    if (!photo) {
+      slot.innerHTML = `<span class="muted">No photo attached</span>`;
+      slot.classList.add("none");
+      return;
+    }
+    const url = API_ORIGIN + photo.url;
+    slot.innerHTML = `<a href="${esc(url)}" target="_blank" rel="noopener" title="Open photo in a new tab"><img src="${esc(url)}" alt="Photo attached to ${esc(reportCache.get(id).ref)}"></a>`;
+    // Re-fit and re-pan once the image has its real height
+    slot.querySelector("img").addEventListener("load", () => popup.update(), { once: true });
+  } catch {
+    slot.innerHTML = `<span class="muted">Could not load the photo</span>`;
+  }
 }
 
 // ---- charts --------------------------------------------------------------------------------
@@ -288,6 +333,7 @@ function renderTable(page) {
 // ---- refresh -------------------------------------------------------------------------------
 
 async function refresh({ fit = false } = {}) {
+  reportCache.clear();
   const p = filterParams();
   const interval = $("#interval").value;
   const csv = `${API}/reports.csv?${p}`;
